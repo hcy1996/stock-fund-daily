@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 from html.parser import HTMLParser
 from pathlib import Path
@@ -91,6 +91,15 @@ def _parse_pct(text: str) -> float | None:
     return float(match.group(1))
 
 
+def _fallback_trade_date(path: Path) -> str:
+    dt = datetime.fromtimestamp(path.stat().st_mtime, tz=ZoneInfo("Asia/Shanghai"))
+    if dt.weekday() == 5:
+        dt -= timedelta(days=1)
+    elif dt.weekday() == 6:
+        dt -= timedelta(days=2)
+    return dt.date().isoformat()
+
+
 def parse_board_file(path: Path, window_days: int) -> list[SectorFlowRecord]:
     if not path.exists():
         return []
@@ -111,7 +120,7 @@ def parse_board_file(path: Path, window_days: int) -> list[SectorFlowRecord]:
     trade_date = (
         trade_date_match.group(1)
         if trade_date_match
-        else datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
+        else _fallback_trade_date(path)
     )
 
     for index, row in enumerate(rows, start=1):

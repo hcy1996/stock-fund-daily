@@ -14,6 +14,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 
 def init_db(conn: sqlite3.Connection) -> None:
+    _migrate_sector_flow_snapshots(conn)
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS sector_flow_snapshots (
@@ -39,7 +40,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             leader_stock_pct_change REAL,
             rank_no INTEGER,
             raw_payload TEXT,
-            PRIMARY KEY (trade_date, window_days, sector_code)
+            PRIMARY KEY (trade_date, window_days, source, sector_code)
         );
 
         CREATE TABLE IF NOT EXISTS email_send_logs (
@@ -50,6 +51,76 @@ def init_db(conn: sqlite3.Connection) -> None:
             status TEXT NOT NULL,
             detail TEXT
         );
+        """
+    )
+    conn.commit()
+
+
+def _migrate_sector_flow_snapshots(conn: sqlite3.Connection) -> None:
+    table_exists = conn.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'sector_flow_snapshots'
+        """
+    ).fetchone()
+    if not table_exists:
+        return
+
+    columns = list(conn.execute("PRAGMA table_info(sector_flow_snapshots)"))
+    pk_columns = [
+        row["name"]
+        for row in sorted(columns, key=lambda item: item["pk"])
+        if row["pk"] > 0
+    ]
+    if pk_columns == ["trade_date", "window_days", "source", "sector_code"]:
+        return
+
+    conn.executescript(
+        """
+        CREATE TABLE sector_flow_snapshots__new (
+            trade_date TEXT NOT NULL,
+            window_days INTEGER NOT NULL,
+            source TEXT NOT NULL,
+            sector_code TEXT NOT NULL,
+            sector_name TEXT NOT NULL,
+            latest_index_value REAL,
+            pct_change REAL,
+            main_net_inflow REAL,
+            main_net_inflow_ratio REAL,
+            super_order_inflow REAL,
+            super_order_ratio REAL,
+            large_order_inflow REAL,
+            large_order_ratio REAL,
+            medium_order_inflow REAL,
+            medium_order_ratio REAL,
+            small_order_inflow REAL,
+            small_order_ratio REAL,
+            leader_stock_name TEXT,
+            leader_stock_code TEXT,
+            leader_stock_pct_change REAL,
+            rank_no INTEGER,
+            raw_payload TEXT,
+            PRIMARY KEY (trade_date, window_days, source, sector_code)
+        );
+
+        INSERT INTO sector_flow_snapshots__new (
+            trade_date, window_days, source, sector_code, sector_name, latest_index_value,
+            pct_change, main_net_inflow, main_net_inflow_ratio, super_order_inflow,
+            super_order_ratio, large_order_inflow, large_order_ratio, medium_order_inflow,
+            medium_order_ratio, small_order_inflow, small_order_ratio, leader_stock_name,
+            leader_stock_code, leader_stock_pct_change, rank_no, raw_payload
+        )
+        SELECT
+            trade_date, window_days, source, sector_code, sector_name, latest_index_value,
+            pct_change, main_net_inflow, main_net_inflow_ratio, super_order_inflow,
+            super_order_ratio, large_order_inflow, large_order_ratio, medium_order_inflow,
+            medium_order_ratio, small_order_inflow, small_order_ratio, leader_stock_name,
+            leader_stock_code, leader_stock_pct_change, rank_no, raw_payload
+        FROM sector_flow_snapshots;
+
+        DROP TABLE sector_flow_snapshots;
+        ALTER TABLE sector_flow_snapshots__new RENAME TO sector_flow_snapshots;
         """
     )
     conn.commit()
@@ -74,8 +145,7 @@ def upsert_sector_flows(conn: sqlite3.Connection, records: list[SectorFlowRecord
             :medium_order_ratio, :small_order_inflow, :small_order_ratio, :leader_stock_name,
             :leader_stock_code, :leader_stock_pct_change, :rank_no, :raw_payload
         )
-        ON CONFLICT(trade_date, window_days, sector_code) DO UPDATE SET
-            source=excluded.source,
+        ON CONFLICT(trade_date, window_days, source, sector_code) DO UPDATE SET
             sector_name=excluded.sector_name,
             latest_index_value=excluded.latest_index_value,
             pct_change=excluded.pct_change,
@@ -103,7 +173,13 @@ def upsert_sector_flows(conn: sqlite3.Connection, records: list[SectorFlowRecord
 
 def latest_trade_date(conn: sqlite3.Connection) -> str | None:
     row = conn.execute(
-        "SELECT trade_date FROM sector_flow_snapshots ORDER BY trade_date DESC LIMIT 1"
+        """
+        SELECT trade_date
+        FROM sector_flow_snapshots
+        GROUP BY trade_date
+        ORDER BY COUNT(DISTINCT window_days || ':' || source) DESC, trade_date DESC
+        LIMIT 1
+        """
     ).fetchone()
     return row["trade_date"] if row else None
 
@@ -112,15 +188,19 @@ def get_window_records(
     conn: sqlite3.Connection,
     trade_date: str,
     window_days: int,
+    source: str | None = None,
     limit: int | None = None,
 ) -> list[sqlite3.Row]:
     sql = """
         SELECT *
         FROM sector_flow_snapshots
         WHERE trade_date = ? AND window_days = ?
-        ORDER BY COALESCE(rank_no, 9999), COALESCE(main_net_inflow, -999999999999) DESC
     """
     params: list[object] = [trade_date, window_days]
+    if source is not None:
+        sql += " AND source = ?"
+        params.append(source)
+    sql += " ORDER BY COALESCE(rank_no, 9999), COALESCE(main_net_inflow, -999999999999) DESC"
     if limit is not None:
         sql += " LIMIT ?"
         params.append(limit)

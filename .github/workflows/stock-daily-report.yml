@@ -130,8 +130,28 @@ jobs:
       - name: Fetch market data
         run: bash ./scripts/fetch_market_data.sh
 
+      - name: Preflight report
+        id: preflight
+        shell: bash
+        run: |
+          REPORT_OUTPUT="$(python3 -m app.cli report --ingest)"
+          printf '%s\n' "$REPORT_OUTPUT"
+          REPORT_PATH="$(printf '%s\n' "$REPORT_OUTPUT" | tail -n 1)"
+          REPORT_FILE="$(basename "$REPORT_PATH")"
+          REPORT_DATE="${REPORT_FILE%%-daily-report.html}"
+          TODAY="$(date +%F)"
+          echo "report_path=$REPORT_PATH" >> "$GITHUB_OUTPUT"
+          echo "report_date=$REPORT_DATE" >> "$GITHUB_OUTPUT"
+          echo "today=$TODAY" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$REPORT_DATE" != "$TODAY" ]; then
+            echo "should_send=false" >> "$GITHUB_OUTPUT"
+            echo "Scheduled run skipped: report date $REPORT_DATE does not match current trading date $TODAY."
+          else
+            echo "should_send=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Generate and send report
-        if: ${{ inputs.dry_run != true }}
+        if: ${{ steps.preflight.outputs.should_send == 'true' && inputs.dry_run != true }}
         run: python3 -m app.cli run-once
 
       - name: Generate report without sending email

@@ -6,18 +6,26 @@ from html.parser import HTMLParser
 import json
 import re
 from pathlib import Path
+import subprocess
 from urllib.request import Request, urlopen
 
+from app.fetch_status import fetch_succeeded, load_fetch_status
 from app.models import SectorComponentRecord, SectorFlowRecord
 from app.sources.eastmoney import parse_window_file
 from app.sources.tonghuashun import parse_board_file
 
 
 EASTMONEY_20D_ROLLUP_PATH = Path("eastmoney") / "20d.json"
+EASTMONEY_WINDOW_ROLLUP_PATHS = {
+    1: Path("eastmoney") / "1d_fallback.json",
+    3: Path("eastmoney") / "3d_fallback.json",
+    5: Path("eastmoney") / "5d_fallback.json",
+    10: Path("eastmoney") / "10d_fallback.json",
+}
 TONGHUASHUN_COMPONENTS_PATH = Path("tonghuashun") / "components_top10.json"
 
 EASTMONEY_20D_HISTORY_URL = (
-    "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
+    "http://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
     "?lmt=0&klt=101"
     "&fields1=f1,f2,f3,f7"
     "&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65"
@@ -26,6 +34,14 @@ EASTMONEY_20D_HISTORY_URL = (
 
 TONGHUASHUN_CONCEPT_INDEX_URL = "https://q.10jqka.com.cn/gn/"
 TONGHUASHUN_CONCEPT_DETAIL_URL = "https://q.10jqka.com.cn/gn/detail/code/{concept_code}/"
+EASTMONEY_CONCEPT_INDEX_URLS = (
+    "https://data.eastmoney.com/bkzj/gn.html",
+    "http://data.eastmoney.com/bkzj/gn.html",
+    "https://quote.eastmoney.com/center/boardlist.html#concept_board",
+    "http://quote.eastmoney.com/center/boardlist.html#concept_board",
+    "https://quote.eastmoney.com/center/gridlist.html#boards-notion",
+    "http://quote.eastmoney.com/center/gridlist.html#boards-notion",
+)
 
 _FLOAT_PATTERN = re.compile(r"([+-]?\d+(?:\.\d+)?)")
 _THS_CONCEPT_LINK_PATTERN = re.compile(
@@ -36,6 +52,8 @@ _THS_COMPONENT_TABLE_PATTERN = re.compile(
     re.S,
 )
 _SECTOR_NAME_NORMALIZE_PATTERN = re.compile(r"[\s()（）\-_/.]+")
+_EASTMONEY_BOARD_CODE_PATTERN = re.compile(r"BK\d+")
+_VALID_EASTMONEY_BOARD_NAME_PATTERN = re.compile(r"[\u4e00-\u9fffA-Za-z0-9]")
 
 
 class _TableParser(HTMLParser):
@@ -74,6 +92,40 @@ class _TableParser(HTMLParser):
             self._current_cell.append(data)
 
 
+class _EastmoneyLinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[tuple[str, str]] = []
+        self._current_href: str | None = None
+        self._current_text: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        href = ""
+        for key, value in attrs:
+            if key == "href" and value:
+                href = value
+                break
+        if _EASTMONEY_BOARD_CODE_PATTERN.search(href):
+            self._current_href = href
+            self._current_text = []
+
+    def handle_data(self, data: str) -> None:
+        if self._current_text is not None:
+            self._current_text.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag != "a" or not self._current_href or self._current_text is None:
+            return
+        code_match = _EASTMONEY_BOARD_CODE_PATTERN.search(self._current_href)
+        text = re.sub(r"\s+", " ", "".join(self._current_text)).strip()
+        if code_match and text and _VALID_EASTMONEY_BOARD_NAME_PATTERN.search(text):
+            self.links.append((code_match.group(0), text))
+        self._current_href = None
+        self._current_text = None
+
+
 def _normalize_sector_name(name: str) -> str:
     return _SECTOR_NAME_NORMALIZE_PATTERN.sub("", name)
 
@@ -91,6 +143,32 @@ def _request_bytes(url: str, user_agent: str, referer: str | None = None) -> byt
                 return response.read()
         except OSError as exc:
             last_error = exc
+
+    curl_cmd = [
+        "curl",
+        "-L",
+        "--silent",
+        "--show-error",
+        "--fail",
+        "-A",
+        user_agent,
+    ]
+    if referer:
+        curl_cmd.extend(["-H", f"Referer: {referer}"])
+    curl_cmd.append(url)
+    try:
+        completed = subprocess.run(
+            curl_cmd,
+            check=True,
+            capture_output=True,
+            text=False,
+        )
+        return completed.stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        if isinstance(exc, OSError):
+            last_error = exc
+        elif exc.stderr:
+            last_error = OSError(exc.stderr.decode("utf-8", errors="ignore").strip())
 
     if last_error is not None:
         raise last_error
@@ -111,6 +189,24 @@ def _fetch_text(
 ) -> str:
     payload = _request_bytes(url, user_agent, referer=referer)
     return payload.decode(encoding, errors="ignore")
+
+
+def _fetch_text_from_candidates(
+    urls: tuple[str, ...],
+    user_agent: str,
+    *,
+    encoding: str,
+    referer: str | None = None,
+) -> str:
+    last_error: OSError | RuntimeError | None = None
+    for url in urls:
+        try:
+            return _fetch_text(url, user_agent, encoding=encoding, referer=referer)
+        except (OSError, RuntimeError) as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("no candidate urls")
 
 
 def _to_float(value: str) -> float | None:
@@ -203,6 +299,25 @@ def build_eastmoney_20d_rollup(
     return ranked_records
 
 
+def _save_eastmoney_window_rollup(raw_dir: Path, window_days: int, records: list[SectorFlowRecord]) -> Path:
+    output_path = raw_dir / EASTMONEY_WINDOW_ROLLUP_PATHS[window_days]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"records": [asdict(record) for record in records]}
+    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return output_path
+
+
+def load_eastmoney_window_rollup(path: Path) -> list[SectorFlowRecord]:
+    if not path.exists():
+        return []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return [SectorFlowRecord(**item) for item in payload.get("records", [])]
+
+
+def eastmoney_window_rollup_path(raw_dir: Path, window_days: int) -> Path:
+    return raw_dir / EASTMONEY_WINDOW_ROLLUP_PATHS[window_days]
+
+
 def save_eastmoney_20d_rollup(raw_dir: Path, records: list[SectorFlowRecord]) -> Path:
     output_path = raw_dir / EASTMONEY_20D_ROLLUP_PATH
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -216,6 +331,138 @@ def load_eastmoney_20d_rollup(path: Path) -> list[SectorFlowRecord]:
         return []
     payload = json.loads(path.read_text(encoding="utf-8"))
     return [SectorFlowRecord(**item) for item in payload.get("records", [])]
+
+
+def _parse_eastmoney_concept_catalog(html: str) -> list[tuple[str, str]]:
+    parser = _EastmoneyLinkParser()
+    parser.feed(html)
+
+    catalog: list[tuple[str, str]] = []
+    seen_codes: set[str] = set()
+    for sector_code, sector_name in parser.links:
+        clean_name = re.sub(r"\s+", " ", sector_name).strip()
+        if (
+            not clean_name
+            or sector_code in seen_codes
+            or len(clean_name) > 24
+            or clean_name in {"概念板块", "行业板块", "地域板块", "更多", "详情"}
+        ):
+            continue
+        seen_codes.add(sector_code)
+        catalog.append((sector_code, clean_name))
+    return catalog
+
+
+def _fetch_eastmoney_concept_catalog(user_agent: str) -> list[tuple[str, str]]:
+    html = _fetch_text_from_candidates(
+        EASTMONEY_CONCEPT_INDEX_URLS,
+        user_agent,
+        encoding="utf-8",
+    )
+    return _parse_eastmoney_concept_catalog(html)
+
+
+def _build_eastmoney_window_records_from_klines(
+    sector_code: str,
+    sector_name: str,
+    klines: list[str],
+    window_days: tuple[int, ...],
+) -> dict[int, SectorFlowRecord]:
+    rows = [kline.split(",") for kline in klines if kline]
+    if not rows:
+        return {}
+
+    last_row = rows[-1]
+    if len(last_row) < 13:
+        return {}
+
+    latest_index_value = float(last_row[11])
+    pct_change = float(last_row[12])
+    trade_date = last_row[0]
+    built: dict[int, SectorFlowRecord] = {}
+    for days in window_days:
+        if len(rows) < days:
+            continue
+        recent_rows = rows[-days:]
+        main_net_inflow = sum(float(item[1]) for item in recent_rows if len(item) > 1)
+        built[days] = SectorFlowRecord(
+            trade_date=trade_date,
+            window_days=days,
+            source="eastmoney",
+            sector_code=sector_code,
+            sector_name=sector_name,
+            latest_index_value=latest_index_value,
+            pct_change=pct_change,
+            main_net_inflow=main_net_inflow,
+            raw_payload=json.dumps(
+                {
+                    "derived_from": "push2his",
+                    "sample_size": len(recent_rows),
+                    "sector_code": sector_code,
+                },
+                ensure_ascii=False,
+            ),
+        )
+    return built
+
+
+def _fetch_eastmoney_history_window_bundle(
+    sector_code: str,
+    sector_name: str,
+    user_agent: str,
+    window_days: tuple[int, ...],
+) -> dict[int, SectorFlowRecord]:
+    history_url = f"{EASTMONEY_20D_HISTORY_URL}&secid=90.{sector_code}"
+    payload = _fetch_json(history_url, user_agent, referer="https://data.eastmoney.com/")
+    klines = payload.get("data", {}).get("klines", [])
+    return _build_eastmoney_window_records_from_klines(
+        sector_code,
+        sector_name,
+        klines,
+        window_days,
+    )
+
+
+def build_eastmoney_window_rollups_from_history(
+    user_agent: str,
+    *,
+    window_days: tuple[int, ...] = (1, 3, 5, 10),
+    max_workers: int = 6,
+) -> dict[int, list[SectorFlowRecord]]:
+    catalog = _fetch_eastmoney_concept_catalog(user_agent)
+    if not catalog:
+        return {days: [] for days in window_days}
+
+    collected = {days: [] for days in window_days}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                _fetch_eastmoney_history_window_bundle,
+                sector_code,
+                sector_name,
+                user_agent,
+                window_days,
+            ): sector_code
+            for sector_code, sector_name in catalog
+        }
+        for future in as_completed(futures):
+            try:
+                bundle = future.result()
+            except (OSError, ValueError, RuntimeError):
+                continue
+            for days, record in bundle.items():
+                collected[days].append(record)
+
+    for days, records in collected.items():
+        ranked_records = sorted(
+            records,
+            key=lambda item: item.main_net_inflow if item.main_net_inflow is not None else float("-inf"),
+            reverse=True,
+        )
+        for index, record in enumerate(ranked_records, start=1):
+            record.rank_no = index
+        collected[days] = ranked_records
+    return collected
 
 
 def _parse_tonghuashun_concept_index(html: str) -> tuple[dict[str, str], dict[str, str]]:
@@ -363,16 +610,37 @@ def load_tonghuashun_top_components(path: Path) -> tuple[dict[str, list[SectorCo
 
 
 def enrich_raw_data(raw_dir: Path, user_agent: str, top_sector_count: int) -> dict[str, int]:
-    daily_records = parse_window_file(raw_dir / "eastmoney" / "1d.json", 1)
-    if len(daily_records) < top_sector_count:
-        daily_records = parse_board_file(raw_dir / "tonghuashun" / "1d.html", 1)
-    if not daily_records:
-        raise RuntimeError("缺少可用的 1 日板块数据，无法生成 20 日累计和概念成分股派生数据。")
+    fetch_status = load_fetch_status(raw_dir)
+    eastmoney_available = fetch_succeeded(fetch_status, "eastmoney", 1)
+    tonghuashun_available = fetch_succeeded(fetch_status, "tonghuashun", 1)
 
-    rollup_seed_records = parse_window_file(raw_dir / "eastmoney" / "1d.json", 1)
+    eastmoney_daily_records = parse_window_file(raw_dir / "eastmoney" / "1d.json", 1) if eastmoney_available else []
+    if eastmoney_available and len(eastmoney_daily_records) < top_sector_count:
+        eastmoney_available = False
+
+    daily_records = eastmoney_daily_records
+    if not daily_records and tonghuashun_available:
+        daily_records = parse_board_file(raw_dir / "tonghuashun" / "1d.html", 1)
+
+    if not daily_records:
+        raise RuntimeError("缺少可用的 1 日板块数据，无法生成派生数据。")
+
+    eastmoney_window_rollups = {window_days: [] for window_days in (1, 3, 5, 10)}
+    if not eastmoney_available:
+        try:
+            eastmoney_window_rollups = build_eastmoney_window_rollups_from_history(user_agent)
+        except (OSError, RuntimeError, ValueError):
+            eastmoney_window_rollups = {window_days: [] for window_days in (1, 3, 5, 10)}
+        fallback_daily_records = eastmoney_window_rollups[1]
+        if fallback_daily_records:
+            daily_records = fallback_daily_records
+
+    for window_days, records in eastmoney_window_rollups.items():
+        _save_eastmoney_window_rollup(raw_dir, window_days, records)
+
     rollup_records = []
-    if len(rollup_seed_records) >= top_sector_count:
-        rollup_records = build_eastmoney_20d_rollup(rollup_seed_records, user_agent)
+    if eastmoney_available:
+        rollup_records = build_eastmoney_20d_rollup(eastmoney_daily_records, user_agent)
     save_eastmoney_20d_rollup(raw_dir, rollup_records)
 
     components_payload = build_tonghuashun_top_components(
@@ -384,6 +652,7 @@ def enrich_raw_data(raw_dir: Path, user_agent: str, top_sector_count: int) -> di
 
     return {
         "rollup_count": len(rollup_records),
+        "eastmoney_fallback_daily_count": len(eastmoney_window_rollups[1]),
         "component_sector_count": len(components_payload["sectors"]),
         "component_unmatched_count": len(components_payload["unmatched_sectors"]),
     }

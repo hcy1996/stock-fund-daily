@@ -92,15 +92,18 @@ EASTMONEY_FETCH_TARGETS = {
 }
 
 EASTMONEY_PAGE_SIZE = 500
+EASTMONEY_LIST_BASE_URL = "http://push2.eastmoney.com/api/qt/clist/get"
+EASTMONEY_LIST_UT = "bd1d9ddb04089700cf9c27f6f7426281"
+EASTMONEY_LIST_FS = "m:90+t:3+f:!50"
 
 
 def build_url(window_days: int) -> str:
     target = EASTMONEY_FETCH_TARGETS[window_days]
     return (
-        "https://push2.eastmoney.com/api/qt/clist/get"
-        "?np=1&fltt=2&invt=2&ut=8dec03ba335b81bf4ebdf7b29ec27d15"
-        f"&pn=1&pz={EASTMONEY_PAGE_SIZE}&po=1&fid={target['fid']}"
-        "&fs=m:90+t:3"
+        f"{EASTMONEY_LIST_BASE_URL}"
+        f"?pn=1&pz={EASTMONEY_PAGE_SIZE}&po=1&np=1"
+        f"&ut={EASTMONEY_LIST_UT}&fltt=2&invt=2&fid={target['fid']}"
+        f"&fs={EASTMONEY_LIST_FS}"
         f"&fields={target['fields']}"
     )
 

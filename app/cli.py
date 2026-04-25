@@ -9,8 +9,14 @@ from zoneinfo import ZoneInfo
 from app.analyzer import build_report_payload
 from app.config import PROJECT_ROOT, load_config
 from app.emailer import send_html_email
+from app.fetch_status import fetch_succeeded, load_fetch_status
 from app.fund_matcher import load_fund_catalog, match_funds
-from app.raw_enricher import enrich_raw_data, load_eastmoney_20d_rollup
+from app.raw_enricher import (
+    eastmoney_window_rollup_path,
+    enrich_raw_data,
+    load_eastmoney_20d_rollup,
+    load_eastmoney_window_rollup,
+)
 from app.report_renderer import render_html, save_report
 from app.sources.eastmoney import expected_raw_files, parse_window_file
 from app.sources.tonghuashun import parse_20d_file, parse_board_file
@@ -18,30 +24,49 @@ from app.storage import connect, init_db, log_email_send, upsert_sector_flows
 from app.scheduler import run_forever
 
 
+def _upsert_source_records(conn, records, top_n: int) -> int:
+    if not records:
+        return 0
+    return upsert_sector_flows(conn, records[:top_n])
+
+
 def ingest_raw(config) -> int:
     conn = connect(config.storage.db_path)
     init_db(conn)
+    fetch_status = load_fetch_status(config.storage.raw_dir)
 
     total = 0
     for window_days, path in expected_raw_files(config.storage.raw_dir).items():
-        eastmoney_records = parse_window_file(path, window_days)
-        tonghuashun_path = config.storage.raw_dir / "tonghuashun" / f"{window_days}d.html"
-        tonghuashun_records = parse_board_file(tonghuashun_path, window_days)
-        selected_records = eastmoney_records
-        if len(eastmoney_records) < config.report.top_n and tonghuashun_records:
-            selected_records = tonghuashun_records
-        total += upsert_sector_flows(conn, selected_records)
+        eastmoney_records = []
+        if fetch_succeeded(fetch_status, "eastmoney", window_days):
+            eastmoney_records = parse_window_file(path, window_days)
+        if len(eastmoney_records) < config.report.top_n:
+            eastmoney_records = load_eastmoney_window_rollup(
+                eastmoney_window_rollup_path(config.storage.raw_dir, window_days)
+            )
+        total += _upsert_source_records(
+            conn,
+            eastmoney_records,
+            config.report.top_n,
+        )
+
+        if fetch_succeeded(fetch_status, "tonghuashun", window_days):
+            tonghuashun_path = config.storage.raw_dir / "tonghuashun" / f"{window_days}d.html"
+            total += _upsert_source_records(
+                conn,
+                parse_board_file(tonghuashun_path, window_days),
+                config.report.top_n,
+            )
 
     eastmoney_20d_records = load_eastmoney_20d_rollup(config.storage.raw_dir / "eastmoney" / "20d.json")
-    if len(eastmoney_20d_records) >= config.report.top_n:
-        total += upsert_sector_flows(conn, eastmoney_20d_records)
-    elif config.sources.enable_tonghuashun_20d:
-        total += upsert_sector_flows(
+    total += _upsert_source_records(conn, eastmoney_20d_records, config.report.top_n)
+
+    if fetch_succeeded(fetch_status, "tonghuashun", 20):
+        total += _upsert_source_records(
             conn,
             parse_20d_file(config.storage.raw_dir / "tonghuashun" / "20d.html"),
+            config.report.top_n,
         )
-    elif eastmoney_20d_records:
-        total += upsert_sector_flows(conn, eastmoney_20d_records)
 
     conn.close()
     return total
@@ -91,6 +116,7 @@ def cmd_enrich_raw(args) -> int:
     )
     print(
         "Enriched raw data: "
+        f"eastmoney_fallback_daily={stats['eastmoney_fallback_daily_count']}, "
         f"20d_rollup={stats['rollup_count']}, "
         f"component_sectors={stats['component_sector_count']}, "
         f"component_unmatched={stats['component_unmatched_count']}"
