@@ -1,0 +1,1885 @@
+
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+      <meta charset="utf-8" />
+      <title>股票基金日报</title>
+      <style>
+        html { scroll-behavior:smooth; }
+        body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif; background:#f3f6fb; color:#1f2937; }
+        .wrap { max-width:1560px; margin:0 auto; padding:14px; }
+        .anchor-section { scroll-margin-top:72px; }
+        .hero { background:linear-gradient(135deg,#0f3d91,#1d4ed8); color:#fff; border-radius:18px; padding:16px; box-shadow:0 18px 40px rgba(29,78,216,.18); }
+        .hero-head { display:block; }
+        .eyebrow { margin:0 0 6px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; opacity:.78; }
+        .hero h1 { margin:0; font-size:34px; line-height:1.2; }
+        .hero-panel-grid { display:grid; grid-template-columns:1.2fr 1fr; gap:10px; margin-top:12px; }
+        .summary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:12px; }
+        .summary-card,.warning-card,.window-card,.section-card { background:#fff; color:#1f2937; border-radius:16px; padding:14px; box-shadow:0 10px 24px rgba(15,23,42,.06); }
+        .summary-card h3,.warning-card h2,.window-card h2,.section-card h2 { margin:0 0 12px; }
+        .summary-card-dark { background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.18); box-shadow:none; }
+        .summary-card-dark .empty-text { color:rgba(255,255,255,.72); }
+        .warning-card { margin-top:12px; border:1px solid #fecaca; background:#fff7ed; }
+        .warning-card ul { margin:0; padding-left:18px; color:#9a3412; line-height:1.7; }
+        .tab-bar { position:sticky; top:8px; z-index:40; margin-top:12px; padding:8px 10px; border-radius:14px; background:rgba(255,255,255,.92); box-shadow:0 10px 24px rgba(15,23,42,.08); backdrop-filter:blur(10px); }
+        .tab-scroll { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; }
+        .tab-scroll::-webkit-scrollbar { display:none; }
+        .tab-link { flex:0 0 auto; padding:8px 12px; border-radius:999px; background:#eef2ff; color:#1d4ed8; text-decoration:none; font-size:13px; font-weight:600; white-space:nowrap; }
+        .tab-link:hover { background:#dbeafe; }
+        .window-card,.section-card { margin-top:12px; }
+        .window-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px; }
+        .chip-row { display:flex; flex-wrap:wrap; gap:8px; }
+        .chip { display:inline-flex; align-items:center; padding:5px 10px; border-radius:999px; background:#e0f2fe; color:#0f172a; font-size:12px; line-height:1.5; border:1px solid #bfdbfe; }
+        .chip-compact { background:#eef2ff; border-color:#c7d2fe; }
+        .chip-with-sources { position:relative; overflow:visible; }
+        .chip-source-badges { position:absolute; top:-8px; right:-6px; display:flex; gap:0; }
+        .chip-source-badge { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:-4px; border-radius:999px; font-size:10px; line-height:1; font-weight:800; box-shadow:0 2px 8px rgba(15,23,42,.18), 0 0 0 2px #ffffff; }
+        .chip-source-eastmoney { background:#1d4ed8; color:#ffffff; z-index:2; }
+        .chip-source-tonghuashun { background:#16a34a; color:#ffffff; z-index:1; }
+        .chip-count { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; margin-left:6px; padding:0 5px; border-radius:999px; background:rgba(255,255,255,.72); font-size:11px; font-weight:700; color:#0f172a; }
+        .heat-1 { background:#f8fbff; border-color:#bfdbfe; color:#334155; }
+        .heat-2 { background:#d1fae5; border-color:#22c55e; color:#14532d; }
+        .heat-3 { background:#fde68a; border-color:#f59e0b; color:#78350f; }
+        .heat-4 { background:#fdba74; border-color:#ea580c; color:#7c2d12; }
+        .heat-5 { background:#f87171; border-color:#b91c1c; color:#ffffff; }
+        .empty-text { color:#94a3b8; font-size:13px; }
+        .table-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+        .table-card { border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; background:#fff; }
+        .table-head,.section-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+        .table-head h3,.section-head h2 { margin:0; }
+        table { width:100%; border-collapse:collapse; }
+        th,td { padding:7px 9px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:top; font-size:13px; line-height:1.45; }
+        th { background:#f8fafc; }
+        tr.row-heat-2 td:first-child { border-left:5px solid #16a34a; }
+        tr.row-heat-3 td:first-child { border-left:5px solid #d97706; }
+        tr.row-heat-4 td:first-child { border-left:5px solid #ea580c; }
+        tr.row-heat-5 td:first-child { border-left:5px solid #b91c1c; }
+        tr.row-heat-2 td { background:#ecfdf5; }
+        tr.row-heat-3 td { background:#fffbeb; }
+        tr.row-heat-4 td { background:#fff7ed; }
+        tr.row-heat-5 td { background:#fee2e2; }
+        .source { color:#1d4ed8; font-size:12px; font-weight:700; white-space:nowrap; }
+        .source-link,.sector-link,.stock-link { color:#1d4ed8; text-decoration:none; }
+        .source-link:hover,.sector-link:hover,.stock-link:hover { text-decoration:underline; }
+        .note { margin:0 0 10px; color:#9a3412; font-size:12px; line-height:1.6; }
+        .component-grid,.fund-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:10px; }
+        .component-card,.fund-card { border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; background:#fff; }
+        .component-head { margin-bottom:8px; font-weight:700; }
+        .fund-meta { margin:0; color:#475569; font-size:12px; line-height:1.6; }
+        .fund-card ul { margin:8px 0 0; padding-left:18px; }
+        .fund-card li { line-height:1.6; font-size:13px; }
+        .footer { margin:12px 0 0; color:#64748b; font-size:12px; }
+        @media (max-width: 1080px) {
+          .hero-head,.hero-panel-grid,.summary-grid,.table-grid { grid-template-columns:1fr; }
+        }
+        @media (max-width: 640px) {
+          .wrap { padding:12px; }
+          .hero h1 { font-size:28px; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        
+    <section id="summary" class="hero anchor-section">
+      <div class="hero-head">
+        <div>
+          <p class="eyebrow">股票基金日报</p>
+          <h1>股票基金日报 | 2026-04-24</h1>
+        </div>
+      </div>
+      <div class="hero-panel-grid">
+        <div class="summary-card summary-card-dark">
+          <h3>高重复热点</h3>
+          <div class="chip-row">
+            <span class='chip heat-4 chip-with-sources' title='同花顺 近 3 日 / 同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-tonghuashun'>顺</span></span><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309085/' target='_blank' rel='noreferrer noopener'>光刻机</a><span class='chip-count'>4</span></span><span class='chip heat-4 chip-with-sources' title='东方财富 近 5 日 / 东方财富 近 20 日 / 同花顺 当日 / 同花顺 近 3 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-eastmoney'>东</span><span class='chip-source-badge chip-source-tonghuashun'>顺</span></span><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300085/' target='_blank' rel='noreferrer noopener'>氟化工概念</a><span class='chip-count'>4</span></span><span class='chip heat-3 chip-with-sources' title='东方财富 当日 / 东方财富 近 3 日 / 东方财富 近 5 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-eastmoney'>东</span></span><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0935.html' target='_blank' rel='noreferrer noopener'>中芯概念</a><span class='chip-count'>3</span></span><span class='chip heat-3 chip-with-sources' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-tonghuashun'>顺</span></span><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309049/' target='_blank' rel='noreferrer noopener'>共封装光学(CPO)</a><span class='chip-count'>3</span></span><span class='chip heat-3 chip-with-sources' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-eastmoney'>东</span></span><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1180.html' target='_blank' rel='noreferrer noopener'>华为海思</a><span class='chip-count'>3</span></span><span class='chip heat-3 chip-with-sources' title='东方财富 近 3 日 / 东方财富 近 5 日 / 东方财富 近 10 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-eastmoney'>东</span></span><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1092.html' target='_blank' rel='noreferrer noopener'>麒麟电池</a><span class='chip-count'>3</span></span><span class='chip heat-3 chip-with-sources' title='东方财富 近 5 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-eastmoney'>东</span></span><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309004/' target='_blank' rel='noreferrer noopener'>先进封装</a><span class='chip-count'>3</span></span><span class='chip heat-3 chip-with-sources' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-eastmoney'>东</span></span><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0890.html' target='_blank' rel='noreferrer noopener'>MLCC</a><span class='chip-count'>3</span></span><span class='chip heat-3 chip-with-sources' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-tonghuashun'>顺</span></span><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309136/' target='_blank' rel='noreferrer noopener'>同花顺果指数</a><span class='chip-count'>3</span></span><span class='chip heat-3 chip-with-sources' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-tonghuashun'>顺</span></span><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308774/' target='_blank' rel='noreferrer noopener'>培育钻石</a><span class='chip-count'>3</span></span>
+          </div>
+        </div>
+        <div class="summary-card summary-card-dark">
+          <h3>跨周期持续热点</h3>
+          <div class="chip-row">
+            <span class='chip heat-3 chip-with-sources' title='东方财富 近 5 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-eastmoney'>东</span></span><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0981.html' target='_blank' rel='noreferrer noopener'>工业气体</a><span class='chip-count'>3</span></span><span class='chip heat-3 chip-with-sources' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-tonghuashun'>顺</span></span><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309030/' target='_blank' rel='noreferrer noopener'>PET铜箔</a><span class='chip-count'>3</span></span><span class='chip heat-3 chip-with-sources' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><span class='chip-source-badges'><span class='chip-source-badge chip-source-eastmoney'>东</span></span><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308887/' target='_blank' rel='noreferrer noopener'>华为欧拉</a><span class='chip-count'>3</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="summary-grid">
+        
+    <div class="summary-card">
+      <h3>东方财富当日 Top10</h3>
+      <div class="chip-row">
+        <span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300733/' target='_blank' rel='noreferrer noopener'>锂电池概念</a></span><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1648.html' target='_blank' rel='noreferrer noopener'>电池技术</a></span><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1173.html' target='_blank' rel='noreferrer noopener'>锂矿概念</a></span><span class='chip heat-2' title='东方财富 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308294/' target='_blank' rel='noreferrer noopener'>固态电池</a><span class='chip-count'>2</span></span><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307822/' target='_blank' rel='noreferrer noopener'>动力电池回收</a></span><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301096/' target='_blank' rel='noreferrer noopener'>钠离子电池</a></span><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1197.html' target='_blank' rel='noreferrer noopener'>反内卷概念</a></span><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0917.html' target='_blank' rel='noreferrer noopener'>半导体概念</a></span><span class='chip heat-2' title='东方财富 当日 / 东方财富 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1000.html' target='_blank' rel='noreferrer noopener'>宁组合</a><span class='chip-count'>2</span></span><span class='chip heat-3' title='东方财富 当日 / 东方财富 近 3 日 / 东方财富 近 5 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0935.html' target='_blank' rel='noreferrer noopener'>中芯概念</a><span class='chip-count'>3</span></span>
+      </div>
+    </div>
+    
+        
+    <div class="summary-card">
+      <h3>同花顺当日 Top10</h3>
+      <div class="chip-row">
+        <span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307904/' target='_blank' rel='noreferrer noopener'>盐湖提锂</a></span><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308742/' target='_blank' rel='noreferrer noopener'>PVDF概念</a></span><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301104/' target='_blank' rel='noreferrer noopener'>化肥</a><span class='chip-count'>2</span></span><span class='chip heat-4' title='东方财富 近 5 日 / 东方财富 近 20 日 / 同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300085/' target='_blank' rel='noreferrer noopener'>氟化工概念</a><span class='chip-count'>4</span></span><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300098/' target='_blank' rel='noreferrer noopener'>磷化工</a><span class='chip-count'>2</span></span><span class='chip heat-2' title='东方财富 近 20 日 / 同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300157/' target='_blank' rel='noreferrer noopener'>草甘膦</a><span class='chip-count'>2</span></span><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308699/' target='_blank' rel='noreferrer noopener'>科创次新股</a><span class='chip-count'>2</span></span><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300351/' target='_blank' rel='noreferrer noopener'>钛白粉概念</a></span><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307816/' target='_blank' rel='noreferrer noopener'>国家大基金持股</a></span><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308517/' target='_blank' rel='noreferrer noopener'>人造肉</a></span>
+      </div>
+    </div>
+    
+      </div>
+    </section>
+    
+        
+        
+    <nav class="tab-bar">
+      <div class="tab-scroll">
+        <a class='tab-link' href='#summary'>摘要</a><a class='tab-link' href='#window-1'>2026-04-24</a><a class='tab-link' href='#window-3'>近3日</a><a class='tab-link' href='#window-5'>近5日</a><a class='tab-link' href='#window-10'>近10日</a><a class='tab-link' href='#window-20'>近20日</a><a class='tab-link' href='#components'>成分股</a><a class='tab-link' href='#funds'>基金</a>
+      </div>
+    </nav>
+    
+        
+    <section id="window-1" class="window-card anchor-section">
+      <div class="window-head">
+        <h2>2026-04-24</h2>
+      </div>
+      <div class="table-grid">
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>东方财富</h3>
+        <a class='source source-link' href='https://data.eastmoney.com/bkzj/gn.html' target='_blank' rel='noreferrer noopener'>东方财富</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="">
+              <td>1</td>
+              <td><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0574.html' target='_blank' rel='noreferrer noopener'>锂电池概念</a></span></td>
+              <td>108.98 亿</td>
+              <td>0.73%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>2</td>
+              <td><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1648.html' target='_blank' rel='noreferrer noopener'>电池技术</a></span></td>
+              <td>88.09 亿</td>
+              <td>0.42%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>3</td>
+              <td><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1173.html' target='_blank' rel='noreferrer noopener'>锂矿概念</a></span></td>
+              <td>87.21 亿</td>
+              <td>3.74%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>4</td>
+              <td><span class='chip heat-2' title='东方财富 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0968.html' target='_blank' rel='noreferrer noopener'>固态电池</a><span class='chip-count'>2</span></span></td>
+              <td>79.16 亿</td>
+              <td>0.75%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>5</td>
+              <td><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1052.html' target='_blank' rel='noreferrer noopener'>动力电池回收</a></span></td>
+              <td>57.82 亿</td>
+              <td>1.33%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>6</td>
+              <td><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0988.html' target='_blank' rel='noreferrer noopener'>钠离子电池</a></span></td>
+              <td>49.86 亿</td>
+              <td>0.78%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>7</td>
+              <td><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1197.html' target='_blank' rel='noreferrer noopener'>反内卷概念</a></span></td>
+              <td>42.25 亿</td>
+              <td>0.11%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>8</td>
+              <td><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0917.html' target='_blank' rel='noreferrer noopener'>半导体概念</a></span></td>
+              <td>41.53 亿</td>
+              <td>0.16%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>9</td>
+              <td><span class='chip heat-2' title='东方财富 当日 / 东方财富 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1000.html' target='_blank' rel='noreferrer noopener'>宁组合</a><span class='chip-count'>2</span></span></td>
+              <td>37.44 亿</td>
+              <td>0.82%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>10</td>
+              <td><span class='chip heat-3' title='东方财富 当日 / 东方财富 近 3 日 / 东方财富 近 5 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0935.html' target='_blank' rel='noreferrer noopener'>中芯概念</a><span class='chip-count'>3</span></span></td>
+              <td>35.35 亿</td>
+              <td>0.87%</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>同花顺</h3>
+        <a class='source source-link' href='https://data.10jqka.com.cn/funds/gnzjl/field/tradezdf/order/desc/page/1/free/1/' target='_blank' rel='noreferrer noopener'>同花顺</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="">
+              <td>1</td>
+              <td><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307904/' target='_blank' rel='noreferrer noopener'>盐湖提锂</a></span></td>
+              <td>46.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>2</td>
+              <td><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308742/' target='_blank' rel='noreferrer noopener'>PVDF概念</a></span></td>
+              <td>17.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>3</td>
+              <td><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301104/' target='_blank' rel='noreferrer noopener'>化肥</a><span class='chip-count'>2</span></span></td>
+              <td>74.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+
+            <tr class="row-heat-4">
+              <td>4</td>
+              <td><span class='chip heat-4' title='东方财富 近 5 日 / 东方财富 近 20 日 / 同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300085/' target='_blank' rel='noreferrer noopener'>氟化工概念</a><span class='chip-count'>4</span></span></td>
+              <td>59.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>5</td>
+              <td><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300098/' target='_blank' rel='noreferrer noopener'>磷化工</a><span class='chip-count'>2</span></span></td>
+              <td>65.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>6</td>
+              <td><span class='chip heat-2' title='东方财富 近 20 日 / 同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300157/' target='_blank' rel='noreferrer noopener'>草甘膦</a><span class='chip-count'>2</span></span></td>
+              <td>19.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>7</td>
+              <td><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308699/' target='_blank' rel='noreferrer noopener'>科创次新股</a><span class='chip-count'>2</span></span></td>
+              <td>23.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>8</td>
+              <td><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300351/' target='_blank' rel='noreferrer noopener'>钛白粉概念</a></span></td>
+              <td>15.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>9</td>
+              <td><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307816/' target='_blank' rel='noreferrer noopener'>国家大基金持股</a></span></td>
+              <td>47.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>10</td>
+              <td><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308517/' target='_blank' rel='noreferrer noopener'>人造肉</a></span></td>
+              <td>20.00 亿</td>
+              <td>-</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+      </div>
+    </section>
+    
+
+    <section id="window-3" class="window-card anchor-section">
+      <div class="window-head">
+        <h2>近 3 日</h2>
+      </div>
+      <div class="table-grid">
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>东方财富</h3>
+        <a class='source source-link' href='https://data.eastmoney.com/bkzj/gn.html' target='_blank' rel='noreferrer noopener'>东方财富</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="row-heat-3">
+              <td>1</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1180.html' target='_blank' rel='noreferrer noopener'>华为海思</a><span class='chip-count'>3</span></span></td>
+              <td>34.78 亿</td>
+              <td>1.89%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>2</td>
+              <td><span class='chip heat-3' title='东方财富 当日 / 东方财富 近 3 日 / 东方财富 近 5 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0935.html' target='_blank' rel='noreferrer noopener'>中芯概念</a><span class='chip-count'>3</span></span></td>
+              <td>33.63 亿</td>
+              <td>1.95%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>3</td>
+              <td><span class='chip heat-2' title='东方财富 当日 / 东方财富 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1000.html' target='_blank' rel='noreferrer noopener'>宁组合</a><span class='chip-count'>2</span></span></td>
+              <td>28.21 亿</td>
+              <td>2.30%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>4</td>
+              <td><span class='chip heat-1' title='东方财富 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0995.html' target='_blank' rel='noreferrer noopener'>华为昇腾</a></span></td>
+              <td>21.00 亿</td>
+              <td>-0.21%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>5</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1013.html' target='_blank' rel='noreferrer noopener'>华为欧拉</a><span class='chip-count'>3</span></span></td>
+              <td>16.88 亿</td>
+              <td>0.77%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>6</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0890.html' target='_blank' rel='noreferrer noopener'>MLCC</a><span class='chip-count'>3</span></span></td>
+              <td>15.68 亿</td>
+              <td>3.00%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>7</td>
+              <td><span class='chip heat-1' title='东方财富 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0477.html' target='_blank' rel='noreferrer noopener'>酿酒概念</a></span></td>
+              <td>14.87 亿</td>
+              <td>1.61%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>8</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 5 日 / 东方财富 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1092.html' target='_blank' rel='noreferrer noopener'>麒麟电池</a><span class='chip-count'>3</span></span></td>
+              <td>13.42 亿</td>
+              <td>-1.89%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>9</td>
+              <td><span class='chip heat-1' title='东方财富 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1653.html' target='_blank' rel='noreferrer noopener'>味蕾经济</a></span></td>
+              <td>13.27 亿</td>
+              <td>0.46%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>10</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 5 日 / 同花顺 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1049.html' target='_blank' rel='noreferrer noopener'>EDR概念</a><span class='chip-count'>3</span></span></td>
+              <td>10.86 亿</td>
+              <td>2.95%</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>同花顺</h3>
+        <a class='source source-link' href='https://data.10jqka.com.cn/funds/gnzjl/board/3/field/tradezdf/order/desc/page/1/free/1/' target='_blank' rel='noreferrer noopener'>同花顺</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="row-heat-2">
+              <td>1</td>
+              <td><span class='chip heat-2' title='同花顺 近 3 日 / 同花顺 近 5 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301292/' target='_blank' rel='noreferrer noopener'>染料</a><span class='chip-count'>2</span></span></td>
+              <td>-1.98 亿</td>
+              <td>3.50%</td>
+            </tr>
+            
+
+            <tr class="row-heat-4">
+              <td>2</td>
+              <td><span class='chip heat-4' title='东方财富 近 5 日 / 东方财富 近 20 日 / 同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300085/' target='_blank' rel='noreferrer noopener'>氟化工概念</a><span class='chip-count'>4</span></span></td>
+              <td>26.06 亿</td>
+              <td>3.06%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>3</td>
+              <td><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301104/' target='_blank' rel='noreferrer noopener'>化肥</a><span class='chip-count'>2</span></span></td>
+              <td>3.95 亿</td>
+              <td>2.85%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>4</td>
+              <td><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300098/' target='_blank' rel='noreferrer noopener'>磷化工</a><span class='chip-count'>2</span></span></td>
+              <td>3.72 亿</td>
+              <td>2.67%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>5</td>
+              <td><span class='chip heat-1' title='同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308438/' target='_blank' rel='noreferrer noopener'>芬太尼</a></span></td>
+              <td>2500.00 万</td>
+              <td>1.69%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>6</td>
+              <td><span class='chip heat-1' title='同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307512/' target='_blank' rel='noreferrer noopener'>石墨电极</a></span></td>
+              <td>2.11 亿</td>
+              <td>1.61%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>7</td>
+              <td><span class='chip heat-1' title='同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308716/' target='_blank' rel='noreferrer noopener'>煤炭概念</a></span></td>
+              <td>8.78 亿</td>
+              <td>1.57%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>8</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 5 日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308803/' target='_blank' rel='noreferrer noopener'>EDR概念</a><span class='chip-count'>3</span></span></td>
+              <td>3.00 亿</td>
+              <td>1.54%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>9</td>
+              <td><span class='chip heat-1' title='同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308202/' target='_blank' rel='noreferrer noopener'>环氧丙烷</a></span></td>
+              <td>1900.00 万</td>
+              <td>1.31%</td>
+            </tr>
+            
+
+            <tr class="row-heat-4">
+              <td>10</td>
+              <td><span class='chip heat-4' title='同花顺 近 3 日 / 同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309085/' target='_blank' rel='noreferrer noopener'>光刻机</a><span class='chip-count'>4</span></span></td>
+              <td>11.31 亿</td>
+              <td>1.28%</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+      </div>
+    </section>
+    
+
+    <section id="window-5" class="window-card anchor-section">
+      <div class="window-head">
+        <h2>近 5 日</h2>
+      </div>
+      <div class="table-grid">
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>东方财富</h3>
+        <a class='source source-link' href='https://data.eastmoney.com/bkzj/gn.html' target='_blank' rel='noreferrer noopener'>东方财富</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="row-heat-3">
+              <td>1</td>
+              <td><span class='chip heat-3' title='东方财富 当日 / 东方财富 近 3 日 / 东方财富 近 5 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0935.html' target='_blank' rel='noreferrer noopener'>中芯概念</a><span class='chip-count'>3</span></span></td>
+              <td>36.08 亿</td>
+              <td>3.58%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>2</td>
+              <td><span class='chip heat-3' title='东方财富 近 5 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1101.html' target='_blank' rel='noreferrer noopener'>先进封装</a><span class='chip-count'>3</span></span></td>
+              <td>23.56 亿</td>
+              <td>-0.98%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>3</td>
+              <td><span class='chip heat-1' title='东方财富 近 5 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0901.html' target='_blank' rel='noreferrer noopener'>3D摄像头</a></span></td>
+              <td>23.45 亿</td>
+              <td>0.25%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>4</td>
+              <td><span class='chip heat-3' title='东方财富 近 5 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0981.html' target='_blank' rel='noreferrer noopener'>工业气体</a><span class='chip-count'>3</span></span></td>
+              <td>16.24 亿</td>
+              <td>8.70%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>5</td>
+              <td><span class='chip heat-2' title='东方财富 近 5 日 / 东方财富 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0949.html' target='_blank' rel='noreferrer noopener'>氦气概念</a><span class='chip-count'>2</span></span></td>
+              <td>15.10 亿</td>
+              <td>15.06%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>6</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 5 日 / 东方财富 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1092.html' target='_blank' rel='noreferrer noopener'>麒麟电池</a><span class='chip-count'>3</span></span></td>
+              <td>10.94 亿</td>
+              <td>-2.52%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>7</td>
+              <td><span class='chip heat-2' title='东方财富 近 5 日 / 东方财富 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0924.html' target='_blank' rel='noreferrer noopener'>地摊经济</a><span class='chip-count'>2</span></span></td>
+              <td>10.03 亿</td>
+              <td>-0.74%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>8</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 5 日 / 同花顺 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1049.html' target='_blank' rel='noreferrer noopener'>EDR概念</a><span class='chip-count'>3</span></span></td>
+              <td>9.93 亿</td>
+              <td>2.03%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>9</td>
+              <td><span class='chip heat-1' title='东方财富 近 5 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1141.html' target='_blank' rel='noreferrer noopener'>混合现实</a></span></td>
+              <td>9.87 亿</td>
+              <td>0.15%</td>
+            </tr>
+            
+
+            <tr class="row-heat-4">
+              <td>10</td>
+              <td><span class='chip heat-4' title='东方财富 近 5 日 / 东方财富 近 20 日 / 同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0690.html' target='_blank' rel='noreferrer noopener'>氟化工概念</a><span class='chip-count'>4</span></span></td>
+              <td>9.18 亿</td>
+              <td>2.23%</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>同花顺</h3>
+        <a class='source source-link' href='https://data.10jqka.com.cn/funds/gnzjl/board/5/field/tradezdf/order/desc/page/1/free/1/' target='_blank' rel='noreferrer noopener'>同花顺</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="row-heat-4">
+              <td>1</td>
+              <td><span class='chip heat-4' title='同花顺 近 3 日 / 同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309085/' target='_blank' rel='noreferrer noopener'>光刻机</a><span class='chip-count'>4</span></span></td>
+              <td>31.58 亿</td>
+              <td>5.81%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>2</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309049/' target='_blank' rel='noreferrer noopener'>共封装光学(CPO)</a><span class='chip-count'>3</span></span></td>
+              <td>264.24 亿</td>
+              <td>5.32%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>3</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309136/' target='_blank' rel='noreferrer noopener'>同花顺果指数</a><span class='chip-count'>3</span></span></td>
+              <td>48.44 亿</td>
+              <td>4.67%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>4</td>
+              <td><span class='chip heat-2' title='同花顺 近 3 日 / 同花顺 近 5 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301292/' target='_blank' rel='noreferrer noopener'>染料</a><span class='chip-count'>2</span></span></td>
+              <td>-4.48 亿</td>
+              <td>4.45%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>5</td>
+              <td><span class='chip heat-2' title='同花顺 近 5 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309151/' target='_blank' rel='noreferrer noopener'>光纤概念</a><span class='chip-count'>2</span></span></td>
+              <td>58.63 亿</td>
+              <td>4.36%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>6</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308774/' target='_blank' rel='noreferrer noopener'>培育钻石</a><span class='chip-count'>3</span></span></td>
+              <td>4.75 亿</td>
+              <td>4.19%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>7</td>
+              <td><span class='chip heat-1' title='同花顺 近 5 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308582/' target='_blank' rel='noreferrer noopener'>光刻胶</a></span></td>
+              <td>18.81 亿</td>
+              <td>4.19%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>8</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309030/' target='_blank' rel='noreferrer noopener'>PET铜箔</a><span class='chip-count'>3</span></span></td>
+              <td>13.50 亿</td>
+              <td>4.04%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>9</td>
+              <td><span class='chip heat-1' title='同花顺 近 5 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308690/' target='_blank' rel='noreferrer noopener'>中芯国际概念</a></span></td>
+              <td>-14.65 亿</td>
+              <td>3.51%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>10</td>
+              <td><span class='chip heat-1' title='同花顺 近 5 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301713/' target='_blank' rel='noreferrer noopener'>中船系</a></span></td>
+              <td>2.13 亿</td>
+              <td>3.50%</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+      </div>
+    </section>
+    
+
+    <section id="window-10" class="window-card anchor-section">
+      <div class="window-head">
+        <h2>近 10 日</h2>
+      </div>
+      <div class="table-grid">
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>东方财富</h3>
+        <a class='source source-link' href='https://data.eastmoney.com/bkzj/gn.html' target='_blank' rel='noreferrer noopener'>东方财富</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="row-heat-3">
+              <td>1</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 5 日 / 东方财富 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1092.html' target='_blank' rel='noreferrer noopener'>麒麟电池</a><span class='chip-count'>3</span></span></td>
+              <td>23.01 亿</td>
+              <td>4.44%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>2</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1180.html' target='_blank' rel='noreferrer noopener'>华为海思</a><span class='chip-count'>3</span></span></td>
+              <td>20.93 亿</td>
+              <td>7.89%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>3</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0890.html' target='_blank' rel='noreferrer noopener'>MLCC</a><span class='chip-count'>3</span></span></td>
+              <td>18.58 亿</td>
+              <td>13.34%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>4</td>
+              <td><span class='chip heat-3' title='东方财富 近 5 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0981.html' target='_blank' rel='noreferrer noopener'>工业气体</a><span class='chip-count'>3</span></span></td>
+              <td>17.25 亿</td>
+              <td>11.71%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>5</td>
+              <td><span class='chip heat-3' title='东方财富 近 5 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1101.html' target='_blank' rel='noreferrer noopener'>先进封装</a><span class='chip-count'>3</span></span></td>
+              <td>9.75 亿</td>
+              <td>6.09%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>6</td>
+              <td><span class='chip heat-2' title='东方财富 近 5 日 / 东方财富 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0949.html' target='_blank' rel='noreferrer noopener'>氦气概念</a><span class='chip-count'>2</span></span></td>
+              <td>8.84 亿</td>
+              <td>16.93%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>7</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1013.html' target='_blank' rel='noreferrer noopener'>华为欧拉</a><span class='chip-count'>3</span></span></td>
+              <td>6.68 亿</td>
+              <td>0.53%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>8</td>
+              <td><span class='chip heat-2' title='东方财富 近 5 日 / 东方财富 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0924.html' target='_blank' rel='noreferrer noopener'>地摊经济</a><span class='chip-count'>2</span></span></td>
+              <td>5.15 亿</td>
+              <td>0.61%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>9</td>
+              <td><span class='chip heat-1' title='东方财富 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1143.html' target='_blank' rel='noreferrer noopener'>空间计算</a></span></td>
+              <td>5.11 亿</td>
+              <td>6.91%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>10</td>
+              <td><span class='chip heat-1' title='东方财富 近 10 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0932.html' target='_blank' rel='noreferrer noopener'>尾气治理</a></span></td>
+              <td>3.96 亿</td>
+              <td>3.81%</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>同花顺</h3>
+        <a class='source source-link' href='https://data.10jqka.com.cn/funds/gnzjl/board/10/field/tradezdf/order/desc/page/1/free/1/' target='_blank' rel='noreferrer noopener'>同花顺</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="row-heat-3">
+              <td>1</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309049/' target='_blank' rel='noreferrer noopener'>共封装光学(CPO)</a><span class='chip-count'>3</span></span></td>
+              <td>23.00 亿</td>
+              <td>11.87%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>2</td>
+              <td><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308699/' target='_blank' rel='noreferrer noopener'>科创次新股</a><span class='chip-count'>2</span></span></td>
+              <td>-2.25 亿</td>
+              <td>11.33%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>3</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308774/' target='_blank' rel='noreferrer noopener'>培育钻石</a><span class='chip-count'>3</span></span></td>
+              <td>1.34 亿</td>
+              <td>11.19%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>4</td>
+              <td><span class='chip heat-1' title='同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309265/' target='_blank' rel='noreferrer noopener'>2026一季报预增</a></span></td>
+              <td>-13.89 亿</td>
+              <td>10.99%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>5</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309030/' target='_blank' rel='noreferrer noopener'>PET铜箔</a><span class='chip-count'>3</span></span></td>
+              <td>-10.14 亿</td>
+              <td>9.78%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>6</td>
+              <td><span class='chip heat-2' title='同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308832/' target='_blank' rel='noreferrer noopener'>PCB概念</a><span class='chip-count'>2</span></span></td>
+              <td>38.46 亿</td>
+              <td>9.30%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>7</td>
+              <td><span class='chip heat-1' title='同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307940/' target='_blank' rel='noreferrer noopener'>存储芯片</a></span></td>
+              <td>33.24 亿</td>
+              <td>9.24%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>8</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309136/' target='_blank' rel='noreferrer noopener'>同花顺果指数</a><span class='chip-count'>3</span></span></td>
+              <td>49.48 亿</td>
+              <td>9.22%</td>
+            </tr>
+            
+
+            <tr class="row-heat-4">
+              <td>9</td>
+              <td><span class='chip heat-4' title='同花顺 近 3 日 / 同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309085/' target='_blank' rel='noreferrer noopener'>光刻机</a><span class='chip-count'>4</span></span></td>
+              <td>-13.32 亿</td>
+              <td>8.78%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>10</td>
+              <td><span class='chip heat-2' title='东方财富 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308294/' target='_blank' rel='noreferrer noopener'>固态电池</a><span class='chip-count'>2</span></span></td>
+              <td>74.00 亿</td>
+              <td>8.73%</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+      </div>
+    </section>
+    
+
+    <section id="window-20" class="window-card anchor-section">
+      <div class="window-head">
+        <h2>近 20 日</h2>
+      </div>
+      <div class="table-grid">
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>东方财富历史累计</h3>
+        <a class='source source-link' href='https://data.eastmoney.com/bkzj/gn.html' target='_blank' rel='noreferrer noopener'>东方财富历史累计</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="row-heat-3">
+              <td>1</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1180.html' target='_blank' rel='noreferrer noopener'>华为海思</a><span class='chip-count'>3</span></span></td>
+              <td>13.05 亿</td>
+              <td>0.66%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>2</td>
+              <td><span class='chip heat-1' title='东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0938.html' target='_blank' rel='noreferrer noopener'>代糖概念</a></span></td>
+              <td>1.41 亿</td>
+              <td>0.05%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>3</td>
+              <td><span class='chip heat-3' title='东方财富 近 5 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0981.html' target='_blank' rel='noreferrer noopener'>工业气体</a><span class='chip-count'>3</span></span></td>
+              <td>-260.53 万</td>
+              <td>1.28%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>4</td>
+              <td><span class='chip heat-3' title='东方财富 近 5 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1101.html' target='_blank' rel='noreferrer noopener'>先进封装</a><span class='chip-count'>3</span></span></td>
+              <td>-1.01 亿</td>
+              <td>-0.25%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>5</td>
+              <td><span class='chip heat-2' title='东方财富 近 20 日 / 同花顺 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0950.html' target='_blank' rel='noreferrer noopener'>草甘膦</a><span class='chip-count'>2</span></span></td>
+              <td>-3.97 亿</td>
+              <td>1.51%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>6</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1013.html' target='_blank' rel='noreferrer noopener'>华为欧拉</a><span class='chip-count'>3</span></span></td>
+              <td>-4.34 亿</td>
+              <td>0.47%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>7</td>
+              <td><span class='chip heat-3' title='东方财富 近 3 日 / 东方财富 近 10 日 / 东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0890.html' target='_blank' rel='noreferrer noopener'>MLCC</a><span class='chip-count'>3</span></span></td>
+              <td>-6.12 亿</td>
+              <td>1.16%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>8</td>
+              <td><span class='chip heat-1' title='东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0872.html' target='_blank' rel='noreferrer noopener'>青蒿素</a></span></td>
+              <td>-6.21 亿</td>
+              <td>1.03%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>9</td>
+              <td><span class='chip heat-1' title='东方财富 近 20 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1116.html' target='_blank' rel='noreferrer noopener'>抗菌面料</a></span></td>
+              <td>-7.92 亿</td>
+              <td>1.04%</td>
+            </tr>
+            
+
+            <tr class="row-heat-4">
+              <td>10</td>
+              <td><span class='chip heat-4' title='东方财富 近 5 日 / 东方财富 近 20 日 / 同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0690.html' target='_blank' rel='noreferrer noopener'>氟化工概念</a><span class='chip-count'>4</span></span></td>
+              <td>-8.10 亿</td>
+              <td>2.06%</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+        
+    <div class="table-card">
+      <div class="table-head">
+        <h3>同花顺</h3>
+        <a class='source source-link' href='https://data.10jqka.com.cn/funds/gnzjl/board/20/field/tradezdf/order/desc/page/1/free/1/' target='_blank' rel='noreferrer noopener'>同花顺</a>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>板块</th>
+            <th>主力净流入</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="row-heat-3">
+              <td>1</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309049/' target='_blank' rel='noreferrer noopener'>共封装光学(CPO)</a><span class='chip-count'>3</span></span></td>
+              <td>-123.63 亿</td>
+              <td>20.82%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>2</td>
+              <td><span class='chip heat-2' title='同花顺 近 5 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309151/' target='_blank' rel='noreferrer noopener'>光纤概念</a><span class='chip-count'>2</span></span></td>
+              <td>-38.63 亿</td>
+              <td>19.32%</td>
+            </tr>
+            
+
+            <tr class="row-heat-4">
+              <td>3</td>
+              <td><span class='chip heat-4' title='同花顺 近 3 日 / 同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309085/' target='_blank' rel='noreferrer noopener'>光刻机</a><span class='chip-count'>4</span></span></td>
+              <td>-10.32 亿</td>
+              <td>18.83%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>4</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309030/' target='_blank' rel='noreferrer noopener'>PET铜箔</a><span class='chip-count'>3</span></span></td>
+              <td>-2.27 亿</td>
+              <td>18.33%</td>
+            </tr>
+            
+
+            <tr class="row-heat-2">
+              <td>5</td>
+              <td><span class='chip heat-2' title='同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308832/' target='_blank' rel='noreferrer noopener'>PCB概念</a><span class='chip-count'>2</span></span></td>
+              <td>-70.94 亿</td>
+              <td>16.32%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>6</td>
+              <td><span class='chip heat-1' title='同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308977/' target='_blank' rel='noreferrer noopener'>F5G概念</a></span></td>
+              <td>-41.87 亿</td>
+              <td>15.86%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>7</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309136/' target='_blank' rel='noreferrer noopener'>同花顺果指数</a><span class='chip-count'>3</span></span></td>
+              <td>-15.61 亿</td>
+              <td>15.05%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>8</td>
+              <td><span class='chip heat-1' title='同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/309125/' target='_blank' rel='noreferrer noopener'>铜缆高速连接</a></span></td>
+              <td>-32.31 亿</td>
+              <td>14.30%</td>
+            </tr>
+            
+
+            <tr class="row-heat-3">
+              <td>9</td>
+              <td><span class='chip heat-3' title='同花顺 近 5 日 / 同花顺 近 10 日 / 同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308774/' target='_blank' rel='noreferrer noopener'>培育钻石</a><span class='chip-count'>3</span></span></td>
+              <td>-6.53 亿</td>
+              <td>13.91%</td>
+            </tr>
+            
+
+            <tr class="">
+              <td>10</td>
+              <td><span class='chip heat-1' title='同花顺 近 20 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307954/' target='_blank' rel='noreferrer noopener'>富士康概念</a></span></td>
+              <td>-29.18 亿</td>
+              <td>13.74%</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </div>
+    
+      </div>
+    </section>
+    
+        <section id="components" class="section-card anchor-section">
+          <div class="section-head">
+            <h2>概念前十成分股</h2>
+            <a class='source source-link' href='https://q.10jqka.com.cn/gn/' target='_blank' rel='noreferrer noopener'>同花顺概念详情页</a>
+          </div>
+          <p class='note'>以下概念暂未匹配到成分股页：电池技术、锂矿概念、反内卷概念、半导体概念、宁组合、中芯概念</p>
+          <div class="component-grid">
+            
+    <div class="component-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300733/' target='_blank' rel='noreferrer noopener'>锂电池概念</a></span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>代码</th>
+            <th>成分股</th>
+            <th>最新价</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td>1</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300283/' target='_blank' rel='noreferrer noopener'>300283</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300283/' target='_blank' rel='noreferrer noopener'>温州宏丰</a></td>
+          <td>11.75</td>
+          <td>20.02%</td>
+        </tr>
+        
+
+        <tr>
+          <td>2</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300721/' target='_blank' rel='noreferrer noopener'>300721</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300721/' target='_blank' rel='noreferrer noopener'>怡达股份</a></td>
+          <td>21.00</td>
+          <td>18.71%</td>
+        </tr>
+        
+
+        <tr>
+          <td>3</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/688141/' target='_blank' rel='noreferrer noopener'>688141</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/688141/' target='_blank' rel='noreferrer noopener'>杰华特</a></td>
+          <td>83.10</td>
+          <td>16.01%</td>
+        </tr>
+        
+
+        <tr>
+          <td>4</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300390/' target='_blank' rel='noreferrer noopener'>300390</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300390/' target='_blank' rel='noreferrer noopener'>天华新能</a></td>
+          <td>91.00</td>
+          <td>13.65%</td>
+        </tr>
+        
+
+        <tr>
+          <td>5</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/688101/' target='_blank' rel='noreferrer noopener'>688101</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/688101/' target='_blank' rel='noreferrer noopener'>三达膜</a></td>
+          <td>17.93</td>
+          <td>10.41%</td>
+        </tr>
+        
+
+        <tr>
+          <td>6</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300057/' target='_blank' rel='noreferrer noopener'>300057</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300057/' target='_blank' rel='noreferrer noopener'>万顺新材</a></td>
+          <td>7.90</td>
+          <td>10.03%</td>
+        </tr>
+        
+
+        <tr>
+          <td>7</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/000973/' target='_blank' rel='noreferrer noopener'>000973</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/000973/' target='_blank' rel='noreferrer noopener'>佛塑科技</a></td>
+          <td>18.99</td>
+          <td>10.02%</td>
+        </tr>
+        
+
+        <tr>
+          <td>8</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603520/' target='_blank' rel='noreferrer noopener'>603520</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603520/' target='_blank' rel='noreferrer noopener'>司太立</a></td>
+          <td>11.64</td>
+          <td>10.02%</td>
+        </tr>
+        
+
+        <tr>
+          <td>9</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/600152/' target='_blank' rel='noreferrer noopener'>600152</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/600152/' target='_blank' rel='noreferrer noopener'>维科技术</a></td>
+          <td>12.96</td>
+          <td>10.02%</td>
+        </tr>
+        
+
+        <tr>
+          <td>10</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002176/' target='_blank' rel='noreferrer noopener'>002176</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002176/' target='_blank' rel='noreferrer noopener'>江特电机</a></td>
+          <td>13.62</td>
+          <td>10.02%</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1648.html' target='_blank' rel='noreferrer noopener'>电池技术</a></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1173.html' target='_blank' rel='noreferrer noopener'>锂矿概念</a></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+    <div class="component-card">
+      <div class="component-head"><span class='chip heat-2' title='东方财富 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308294/' target='_blank' rel='noreferrer noopener'>固态电池</a><span class='chip-count'>2</span></span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>代码</th>
+            <th>成分股</th>
+            <th>最新价</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td>1</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300283/' target='_blank' rel='noreferrer noopener'>300283</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300283/' target='_blank' rel='noreferrer noopener'>温州宏丰</a></td>
+          <td>11.75</td>
+          <td>20.02%</td>
+        </tr>
+        
+
+        <tr>
+          <td>2</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300390/' target='_blank' rel='noreferrer noopener'>300390</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300390/' target='_blank' rel='noreferrer noopener'>天华新能</a></td>
+          <td>91.00</td>
+          <td>13.65%</td>
+        </tr>
+        
+
+        <tr>
+          <td>3</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/301307/' target='_blank' rel='noreferrer noopener'>301307</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/301307/' target='_blank' rel='noreferrer noopener'>美利信</a></td>
+          <td>46.33</td>
+          <td>10.92%</td>
+        </tr>
+        
+
+        <tr>
+          <td>4</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300057/' target='_blank' rel='noreferrer noopener'>300057</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300057/' target='_blank' rel='noreferrer noopener'>万顺新材</a></td>
+          <td>7.90</td>
+          <td>10.03%</td>
+        </tr>
+        
+
+        <tr>
+          <td>5</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/000973/' target='_blank' rel='noreferrer noopener'>000973</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/000973/' target='_blank' rel='noreferrer noopener'>佛塑科技</a></td>
+          <td>18.99</td>
+          <td>10.02%</td>
+        </tr>
+        
+
+        <tr>
+          <td>6</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/600152/' target='_blank' rel='noreferrer noopener'>600152</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/600152/' target='_blank' rel='noreferrer noopener'>维科技术</a></td>
+          <td>12.96</td>
+          <td>10.02%</td>
+        </tr>
+        
+
+        <tr>
+          <td>7</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002176/' target='_blank' rel='noreferrer noopener'>002176</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002176/' target='_blank' rel='noreferrer noopener'>江特电机</a></td>
+          <td>13.62</td>
+          <td>10.02%</td>
+        </tr>
+        
+
+        <tr>
+          <td>8</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002812/' target='_blank' rel='noreferrer noopener'>002812</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002812/' target='_blank' rel='noreferrer noopener'>恩捷股份</a></td>
+          <td>77.18</td>
+          <td>10.01%</td>
+        </tr>
+        
+
+        <tr>
+          <td>9</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002240/' target='_blank' rel='noreferrer noopener'>002240</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002240/' target='_blank' rel='noreferrer noopener'>盛新锂能</a></td>
+          <td>50.93</td>
+          <td>10.00%</td>
+        </tr>
+        
+
+        <tr>
+          <td>10</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603876/' target='_blank' rel='noreferrer noopener'>603876</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603876/' target='_blank' rel='noreferrer noopener'>鼎胜新材</a></td>
+          <td>26.95</td>
+          <td>10.00%</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    
+
+    <div class="component-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307822/' target='_blank' rel='noreferrer noopener'>动力电池回收</a></span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>代码</th>
+            <th>成分股</th>
+            <th>最新价</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td>1</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300422/' target='_blank' rel='noreferrer noopener'>300422</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300422/' target='_blank' rel='noreferrer noopener'>博世科</a></td>
+          <td>5.56</td>
+          <td>20.09%</td>
+        </tr>
+        
+
+        <tr>
+          <td>2</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002407/' target='_blank' rel='noreferrer noopener'>002407</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002407/' target='_blank' rel='noreferrer noopener'>多氟多</a></td>
+          <td>33.04</td>
+          <td>9.99%</td>
+        </tr>
+        
+
+        <tr>
+          <td>3</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002466/' target='_blank' rel='noreferrer noopener'>002466</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002466/' target='_blank' rel='noreferrer noopener'>天齐锂业</a></td>
+          <td>73.70</td>
+          <td>8.43%</td>
+        </tr>
+        
+
+        <tr>
+          <td>4</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/688148/' target='_blank' rel='noreferrer noopener'>688148</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/688148/' target='_blank' rel='noreferrer noopener'>芳源股份</a></td>
+          <td>10.25</td>
+          <td>7.55%</td>
+        </tr>
+        
+
+        <tr>
+          <td>5</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300919/' target='_blank' rel='noreferrer noopener'>300919</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300919/' target='_blank' rel='noreferrer noopener'>中伟新材</a></td>
+          <td>61.38</td>
+          <td>7.50%</td>
+        </tr>
+        
+
+        <tr>
+          <td>6</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002709/' target='_blank' rel='noreferrer noopener'>002709</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002709/' target='_blank' rel='noreferrer noopener'>天赐材料</a></td>
+          <td>53.04</td>
+          <td>7.35%</td>
+        </tr>
+        
+
+        <tr>
+          <td>7</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603906/' target='_blank' rel='noreferrer noopener'>603906</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603906/' target='_blank' rel='noreferrer noopener'>龙蟠科技</a></td>
+          <td>32.56</td>
+          <td>6.93%</td>
+        </tr>
+        
+
+        <tr>
+          <td>8</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002460/' target='_blank' rel='noreferrer noopener'>002460</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002460/' target='_blank' rel='noreferrer noopener'>赣锋锂业</a></td>
+          <td>84.99</td>
+          <td>6.40%</td>
+        </tr>
+        
+
+        <tr>
+          <td>9</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002738/' target='_blank' rel='noreferrer noopener'>002738</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002738/' target='_blank' rel='noreferrer noopener'>中矿资源</a></td>
+          <td>85.37</td>
+          <td>6.25%</td>
+        </tr>
+        
+
+        <tr>
+          <td>10</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/688269/' target='_blank' rel='noreferrer noopener'>688269</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/688269/' target='_blank' rel='noreferrer noopener'>凯立新材</a></td>
+          <td>41.21</td>
+          <td>5.02%</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    
+
+    <div class="component-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301096/' target='_blank' rel='noreferrer noopener'>钠离子电池</a></span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>代码</th>
+            <th>成分股</th>
+            <th>最新价</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td>1</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300057/' target='_blank' rel='noreferrer noopener'>300057</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300057/' target='_blank' rel='noreferrer noopener'>万顺新材</a></td>
+          <td>7.90</td>
+          <td>10.03%</td>
+        </tr>
+        
+
+        <tr>
+          <td>2</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/600152/' target='_blank' rel='noreferrer noopener'>600152</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/600152/' target='_blank' rel='noreferrer noopener'>维科技术</a></td>
+          <td>12.96</td>
+          <td>10.02%</td>
+        </tr>
+        
+
+        <tr>
+          <td>3</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603876/' target='_blank' rel='noreferrer noopener'>603876</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603876/' target='_blank' rel='noreferrer noopener'>鼎胜新材</a></td>
+          <td>26.95</td>
+          <td>10.00%</td>
+        </tr>
+        
+
+        <tr>
+          <td>4</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002407/' target='_blank' rel='noreferrer noopener'>002407</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002407/' target='_blank' rel='noreferrer noopener'>多氟多</a></td>
+          <td>33.04</td>
+          <td>9.99%</td>
+        </tr>
+        
+
+        <tr>
+          <td>5</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300919/' target='_blank' rel='noreferrer noopener'>300919</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300919/' target='_blank' rel='noreferrer noopener'>中伟新材</a></td>
+          <td>61.38</td>
+          <td>7.50%</td>
+        </tr>
+        
+
+        <tr>
+          <td>6</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002709/' target='_blank' rel='noreferrer noopener'>002709</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/002709/' target='_blank' rel='noreferrer noopener'>天赐材料</a></td>
+          <td>53.04</td>
+          <td>7.35%</td>
+        </tr>
+        
+
+        <tr>
+          <td>7</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603906/' target='_blank' rel='noreferrer noopener'>603906</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603906/' target='_blank' rel='noreferrer noopener'>龙蟠科技</a></td>
+          <td>32.56</td>
+          <td>6.93%</td>
+        </tr>
+        
+
+        <tr>
+          <td>8</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603659/' target='_blank' rel='noreferrer noopener'>603659</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/603659/' target='_blank' rel='noreferrer noopener'>璞泰来</a></td>
+          <td>36.71</td>
+          <td>6.78%</td>
+        </tr>
+        
+
+        <tr>
+          <td>9</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300082/' target='_blank' rel='noreferrer noopener'>300082</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/300082/' target='_blank' rel='noreferrer noopener'>奥克股份</a></td>
+          <td>12.95</td>
+          <td>5.89%</td>
+        </tr>
+        
+
+        <tr>
+          <td>10</td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/600409/' target='_blank' rel='noreferrer noopener'>600409</a></td>
+          <td><a class='stock-link' href='https://stockpage.10jqka.com.cn/600409/' target='_blank' rel='noreferrer noopener'>三友化工</a></td>
+          <td>7.69</td>
+          <td>4.63%</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1197.html' target='_blank' rel='noreferrer noopener'>反内卷概念</a></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0917.html' target='_blank' rel='noreferrer noopener'>半导体概念</a></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-2' title='东方财富 当日 / 东方财富 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1000.html' target='_blank' rel='noreferrer noopener'>宁组合</a><span class='chip-count'>2</span></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-3' title='东方财富 当日 / 东方财富 近 3 日 / 东方财富 近 5 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0935.html' target='_blank' rel='noreferrer noopener'>中芯概念</a><span class='chip-count'>3</span></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307904/' target='_blank' rel='noreferrer noopener'>盐湖提锂</a></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308742/' target='_blank' rel='noreferrer noopener'>PVDF概念</a></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301104/' target='_blank' rel='noreferrer noopener'>化肥</a><span class='chip-count'>2</span></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-4' title='东方财富 近 5 日 / 东方财富 近 20 日 / 同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300085/' target='_blank' rel='noreferrer noopener'>氟化工概念</a><span class='chip-count'>4</span></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300098/' target='_blank' rel='noreferrer noopener'>磷化工</a><span class='chip-count'>2</span></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-2' title='东方财富 近 20 日 / 同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300157/' target='_blank' rel='noreferrer noopener'>草甘膦</a><span class='chip-count'>2</span></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308699/' target='_blank' rel='noreferrer noopener'>科创次新股</a><span class='chip-count'>2</span></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300351/' target='_blank' rel='noreferrer noopener'>钛白粉概念</a></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307816/' target='_blank' rel='noreferrer noopener'>国家大基金持股</a></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+
+        <div class="component-card">
+          <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308517/' target='_blank' rel='noreferrer noopener'>人造肉</a></span></div>
+          <p class="empty-text">暂无成分股数据</p>
+        </div>
+        
+          </div>
+        </section>
+        <section id="funds" class="section-card anchor-section">
+          <div class="section-head">
+            <h2>热点板块关联 ETF/基金</h2>
+            <span class="source">按双源当日榜单并集匹配</span>
+          </div>
+          <div class="fund-grid">
+            
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300733/' target='_blank' rel='noreferrer noopener'>锂电池概念</a></span></div>
+      <p class="fund-meta">净流入：108.98 亿，涨跌幅：0.73%</p>
+      <ul><li><strong>新能源车ETF</strong>（159806 / ETF）</li>
+<li><strong>新能源汽车ETF</strong>（515030 / ETF）</li>
+<li><strong>电池ETF</strong>（159755 / ETF）</li></ul>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1648.html' target='_blank' rel='noreferrer noopener'>电池技术</a></span></div>
+      <p class="fund-meta">净流入：88.09 亿，涨跌幅：0.42%</p>
+      <ul><li><strong>新能源车ETF</strong>（159806 / ETF）</li>
+<li><strong>新能源汽车ETF</strong>（515030 / ETF）</li>
+<li><strong>电池ETF</strong>（159755 / ETF）</li></ul>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1173.html' target='_blank' rel='noreferrer noopener'>锂矿概念</a></span></div>
+      <p class="fund-meta">净流入：87.21 亿，涨跌幅：3.74%</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-2' title='东方财富 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308294/' target='_blank' rel='noreferrer noopener'>固态电池</a><span class='chip-count'>2</span></span></div>
+      <p class="fund-meta">净流入：79.16 亿，涨跌幅：0.75%</p>
+      <ul><li><strong>新能源车ETF</strong>（159806 / ETF）</li>
+<li><strong>新能源汽车ETF</strong>（515030 / ETF）</li>
+<li><strong>电池ETF</strong>（159755 / ETF）</li></ul>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307822/' target='_blank' rel='noreferrer noopener'>动力电池回收</a></span></div>
+      <p class="fund-meta">净流入：57.82 亿，涨跌幅：1.33%</p>
+      <ul><li><strong>新能源车ETF</strong>（159806 / ETF）</li>
+<li><strong>新能源汽车ETF</strong>（515030 / ETF）</li>
+<li><strong>电池ETF</strong>（159755 / ETF）</li></ul>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301096/' target='_blank' rel='noreferrer noopener'>钠离子电池</a></span></div>
+      <p class="fund-meta">净流入：49.86 亿，涨跌幅：0.78%</p>
+      <ul><li><strong>新能源车ETF</strong>（159806 / ETF）</li>
+<li><strong>新能源汽车ETF</strong>（515030 / ETF）</li>
+<li><strong>电池ETF</strong>（159755 / ETF）</li></ul>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1197.html' target='_blank' rel='noreferrer noopener'>反内卷概念</a></span></div>
+      <p class="fund-meta">净流入：42.25 亿，涨跌幅：0.11%</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='东方财富 当日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0917.html' target='_blank' rel='noreferrer noopener'>半导体概念</a></span></div>
+      <p class="fund-meta">净流入：41.53 亿，涨跌幅：0.16%</p>
+      <ul><li><strong>芯片ETF</strong>（159995 / ETF）</li>
+<li><strong>半导体ETF</strong>（512480 / ETF）</li>
+<li><strong>科创芯片ETF</strong>（588000 / ETF）</li></ul>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-2' title='东方财富 当日 / 东方财富 近 3 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK1000.html' target='_blank' rel='noreferrer noopener'>宁组合</a><span class='chip-count'>2</span></span></div>
+      <p class="fund-meta">净流入：37.44 亿，涨跌幅：0.82%</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-3' title='东方财富 当日 / 东方财富 近 3 日 / 东方财富 近 5 日'><a class='sector-link' href='https://data.eastmoney.com/bkzj/BK0935.html' target='_blank' rel='noreferrer noopener'>中芯概念</a><span class='chip-count'>3</span></span></div>
+      <p class="fund-meta">净流入：35.35 亿，涨跌幅：0.87%</p>
+      <ul><li><strong>芯片ETF</strong>（159995 / ETF）</li>
+<li><strong>半导体ETF</strong>（512480 / ETF）</li>
+<li><strong>科创芯片ETF</strong>（588000 / ETF）</li></ul>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307904/' target='_blank' rel='noreferrer noopener'>盐湖提锂</a></span></div>
+      <p class="fund-meta">净流入：46.00 亿，涨跌幅：-</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308742/' target='_blank' rel='noreferrer noopener'>PVDF概念</a></span></div>
+      <p class="fund-meta">净流入：17.00 亿，涨跌幅：-</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/301104/' target='_blank' rel='noreferrer noopener'>化肥</a><span class='chip-count'>2</span></span></div>
+      <p class="fund-meta">净流入：74.00 亿，涨跌幅：-</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-4' title='东方财富 近 5 日 / 东方财富 近 20 日 / 同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300085/' target='_blank' rel='noreferrer noopener'>氟化工概念</a><span class='chip-count'>4</span></span></div>
+      <p class="fund-meta">净流入：59.00 亿，涨跌幅：-</p>
+      <ul><li><strong>黄金ETF</strong>（518880 / ETF）</li>
+<li><strong>有色ETF</strong>（159980 / ETF）</li>
+<li><strong>稀土ETF</strong>（516150 / ETF）</li></ul>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 3 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300098/' target='_blank' rel='noreferrer noopener'>磷化工</a><span class='chip-count'>2</span></span></div>
+      <p class="fund-meta">净流入：65.00 亿，涨跌幅：-</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-2' title='东方财富 近 20 日 / 同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300157/' target='_blank' rel='noreferrer noopener'>草甘膦</a><span class='chip-count'>2</span></span></div>
+      <p class="fund-meta">净流入：19.00 亿，涨跌幅：-</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-2' title='同花顺 当日 / 同花顺 近 10 日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308699/' target='_blank' rel='noreferrer noopener'>科创次新股</a><span class='chip-count'>2</span></span></div>
+      <p class="fund-meta">净流入：23.00 亿，涨跌幅：-</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/300351/' target='_blank' rel='noreferrer noopener'>钛白粉概念</a></span></div>
+      <p class="fund-meta">净流入：15.00 亿，涨跌幅：-</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/307816/' target='_blank' rel='noreferrer noopener'>国家大基金持股</a></span></div>
+      <p class="fund-meta">净流入：47.00 亿，涨跌幅：-</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+
+    <div class="fund-card">
+      <div class="component-head"><span class='chip heat-1' title='同花顺 当日'><a class='sector-link' href='https://q.10jqka.com.cn/gn/detail/code/308517/' target='_blank' rel='noreferrer noopener'>人造肉</a></span></div>
+      <p class="fund-meta">净流入：20.00 亿，涨跌幅：-</p>
+      <p class='empty-text'>暂无匹配 ETF/基金</p>
+    </div>
+    
+          </div>
+        </section>
+        <p class="footer">数据来源：东方财富公开接口、东方财富历史累计、同花顺公开页面。报告仅做信息整理，不构成投资建议。</p>
+      </div>
+    </body>
+    </html>
+    
