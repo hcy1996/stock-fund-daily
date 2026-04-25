@@ -82,6 +82,7 @@ python3 -m app.cli run-once
 - `config.json`、`data/raw/`、`data/*.db`、`output/*.html` 已加入 `.gitignore`
 - GitHub runner 默认不保留本地 SQLite 和原始抓取数据，因此邮件发送日志不会自动跨天保留
 - 每次执行完成后会上传当次生成的 HTML 报告 artifact，便于回看
+- workflow 还会把当次报告提交到仓库 `reports/` 目录，并同步更新 `reports/latest.html`
 
 ## 常用命令
 

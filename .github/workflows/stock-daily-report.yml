@@ -12,7 +12,7 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   daily-report:
@@ -165,3 +165,23 @@ jobs:
           name: stock-daily-report
           path: output/*.html
           if-no-files-found: warn
+
+      - name: Save report into repository
+        if: ${{ steps.preflight.outputs.report_path != '' && (inputs.dry_run == true || steps.preflight.outputs.should_send == 'true') }}
+        shell: bash
+        run: |
+          mkdir -p reports
+          cp "${{ steps.preflight.outputs.report_path }}" "reports/${{ steps.preflight.outputs.report_date }}-daily-report.html"
+          cp "${{ steps.preflight.outputs.report_path }}" "reports/latest.html"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add reports
+          if git diff --cached --quiet; then
+            echo "No report changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: save daily report ${{ steps.preflight.outputs.report_date }} [skip ci]"
+          git push origin HEAD:${{ github.ref_name }}
