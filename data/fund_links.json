@@ -1,0 +1,80 @@
+[
+  {
+    "keywords": ["中芯", "芯片", "半导体", "先进封装", "华为海思", "MLCC"],
+    "funds": [
+      { "code": "159995", "name": "芯片ETF", "type": "ETF" },
+      { "code": "512480", "name": "半导体ETF", "type": "ETF" },
+      { "code": "588000", "name": "科创芯片ETF", "type": "ETF" }
+    ],
+    "note": "半导体链条优先"
+  },
+  {
+    "keywords": ["人工智能", "混合现实", "空间计算", "AIGC", "算力", "CPO"],
+    "funds": [
+      { "code": "159819", "name": "人工智能ETF", "type": "ETF" },
+      { "code": "515980", "name": "人工智能ETF", "type": "ETF" },
+      { "code": "159363", "name": "云计算ETF", "type": "ETF" }
+    ]
+  },
+  {
+    "keywords": ["机器人", "自动化", "工业母机"],
+    "funds": [
+      { "code": "159770", "name": "机器人ETF", "type": "ETF" },
+      { "code": "562500", "name": "机器人ETF", "type": "ETF" }
+    ]
+  },
+  {
+    "keywords": ["华为", "鸿蒙", "信创", "欧拉", "EDR", "软件"],
+    "funds": [
+      { "code": "515230", "name": "软件ETF", "type": "ETF" },
+      { "code": "159539", "name": "信创ETF", "type": "ETF" },
+      { "code": "562030", "name": "信息技术ETF", "type": "ETF" }
+    ]
+  },
+  {
+    "keywords": ["电池", "麒麟电池", "锂电", "储能", "新能源车"],
+    "funds": [
+      { "code": "159806", "name": "新能源车ETF", "type": "ETF" },
+      { "code": "515030", "name": "新能源汽车ETF", "type": "ETF" },
+      { "code": "159755", "name": "电池ETF", "type": "ETF" }
+    ]
+  },
+  {
+    "keywords": ["光伏", "风电", "氢能", "工业气体", "氦气概念"],
+    "funds": [
+      { "code": "516160", "name": "新能源ETF", "type": "ETF" },
+      { "code": "159857", "name": "光伏ETF", "type": "ETF" },
+      { "code": "516660", "name": "新能源车龙头ETF", "type": "ETF" }
+    ]
+  },
+  {
+    "keywords": ["军工", "卫星", "低空经济"],
+    "funds": [
+      { "code": "512660", "name": "军工ETF", "type": "ETF" },
+      { "code": "159806", "name": "国防军工ETF", "type": "ETF" }
+    ]
+  },
+  {
+    "keywords": ["创新药", "医药", "CXO", "器械"],
+    "funds": [
+      { "code": "159992", "name": "创新药ETF", "type": "ETF" },
+      { "code": "512010", "name": "医药ETF", "type": "ETF" },
+      { "code": "159938", "name": "医药卫生ETF", "type": "ETF" }
+    ]
+  },
+  {
+    "keywords": ["黄金", "有色", "稀土", "氟化工概念"],
+    "funds": [
+      { "code": "518880", "name": "黄金ETF", "type": "ETF" },
+      { "code": "159980", "name": "有色ETF", "type": "ETF" },
+      { "code": "516150", "name": "稀土ETF", "type": "ETF" }
+    ]
+  },
+  {
+    "keywords": ["消费", "地摊经济", "零售"],
+    "funds": [
+      { "code": "159928", "name": "消费ETF", "type": "ETF" },
+      { "code": "510150", "name": "消费ETF", "type": "ETF" }
+    ]
+  }
+]

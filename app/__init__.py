@@ -1,0 +1,1 @@
+"""Stock daily report package."""

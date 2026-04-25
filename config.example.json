@@ -1,0 +1,35 @@
+{
+  "smtp": {
+    "host": "smtp.example.com",
+    "port": 465,
+    "username": "your_account@example.com",
+    "password": "your_app_password",
+    "sender": "your_account@example.com",
+    "use_ssl": true,
+    "starttls": false
+  },
+  "recipients": [
+    "receiver@example.com"
+  ],
+  "schedule": {
+    "hour": 21,
+    "minute": 0,
+    "timezone": "Asia/Shanghai"
+  },
+  "storage": {
+    "db_path": "data/stock_report.db",
+    "raw_dir": "data/raw",
+    "output_dir": "output"
+  },
+  "report": {
+    "top_n": 10,
+    "funds_per_sector": 3
+  },
+  "sources": {
+    "enable_tonghuashun_20d": true,
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+  },
+  "meta": {
+    "report_name": "股票基金日报"
+  }
+}

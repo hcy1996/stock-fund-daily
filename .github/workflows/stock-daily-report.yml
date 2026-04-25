@@ -1,0 +1,147 @@
+name: Stock Daily Report
+
+on:
+  schedule:
+    - cron: "0 13 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Generate report only and skip email sending"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  daily-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: stock-daily-report
+      cancel-in-progress: false
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build runtime config
+        env:
+          SMTP_HOST: ${{ secrets.STOCK_REPORT_SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.STOCK_REPORT_SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.STOCK_REPORT_SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.STOCK_REPORT_SMTP_PASSWORD }}
+          SMTP_SENDER: ${{ secrets.STOCK_REPORT_SMTP_SENDER }}
+          REPORT_RECIPIENTS_JSON: ${{ secrets.STOCK_REPORT_RECIPIENTS_JSON }}
+          SMTP_USE_SSL: ${{ vars.STOCK_REPORT_SMTP_USE_SSL }}
+          SMTP_STARTTLS: ${{ vars.STOCK_REPORT_SMTP_STARTTLS }}
+          REPORT_NAME: ${{ vars.STOCK_REPORT_NAME }}
+          ENABLE_TONGHUASHUN_20D: ${{ vars.STOCK_REPORT_ENABLE_TONGHUASHUN_20D }}
+          USER_AGENT: ${{ vars.STOCK_REPORT_USER_AGENT }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          required = [
+              "SMTP_HOST",
+              "SMTP_PORT",
+              "SMTP_USERNAME",
+              "SMTP_PASSWORD",
+              "SMTP_SENDER",
+              "REPORT_RECIPIENTS_JSON",
+          ]
+          missing = [key for key in required if not os.environ.get(key)]
+          if missing:
+              raise SystemExit(
+                  f"Missing required GitHub secrets: {', '.join(missing)}"
+              )
+
+          recipients = json.loads(os.environ["REPORT_RECIPIENTS_JSON"])
+          if not isinstance(recipients, list) or not recipients:
+              raise SystemExit(
+                  "STOCK_REPORT_RECIPIENTS_JSON must be a non-empty JSON array"
+              )
+
+          def env_bool(key: str, default: bool) -> bool:
+              value = os.environ.get(key, "").strip().lower()
+              if not value:
+                  return default
+              return value in {"1", "true", "yes", "on"}
+
+          config = {
+              "smtp": {
+                  "host": os.environ["SMTP_HOST"],
+                  "port": int(os.environ["SMTP_PORT"]),
+                  "username": os.environ["SMTP_USERNAME"],
+                  "password": os.environ["SMTP_PASSWORD"],
+                  "sender": os.environ["SMTP_SENDER"],
+                  "use_ssl": env_bool("SMTP_USE_SSL", True),
+                  "starttls": env_bool("SMTP_STARTTLS", False),
+              },
+              "recipients": recipients,
+              "schedule": {
+                  "hour": 21,
+                  "minute": 0,
+                  "timezone": "Asia/Shanghai",
+              },
+              "storage": {
+                  "db_path": "data/stock_report.db",
+                  "raw_dir": "data/raw",
+                  "output_dir": "output",
+              },
+              "report": {
+                  "top_n": 10,
+                  "funds_per_sector": 3,
+              },
+              "sources": {
+                  "enable_tonghuashun_20d": env_bool(
+                      "ENABLE_TONGHUASHUN_20D", True
+                  ),
+                  "user_agent": os.environ.get(
+                      "USER_AGENT",
+                      (
+                          "Mozilla/5.0 (X11; Linux x86_64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/135.0.0.0 Safari/537.36"
+                      ),
+                  ),
+              },
+              "meta": {
+                  "report_name": os.environ.get("REPORT_NAME", "").strip()
+                  or "股票基金日报"
+              },
+          }
+
+          Path("config.json").write_text(
+              json.dumps(config, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Fetch market data
+        run: bash ./scripts/fetch_market_data.sh
+
+      - name: Generate and send report
+        if: ${{ inputs.dry_run != true }}
+        run: python3 -m app.cli run-once
+
+      - name: Generate report without sending email
+        if: ${{ inputs.dry_run == true }}
+        run: python3 -m app.cli run-once --dry-run
+
+      - name: Upload generated report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-daily-report
+          path: output/*.html
+          if-no-files-found: warn
