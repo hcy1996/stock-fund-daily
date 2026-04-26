@@ -17,6 +17,10 @@ from app.config import PROJECT_ROOT, load_config
 from app.emailer import send_html_email
 from app.fetch_status import fetch_succeeded, load_fetch_status
 from app.fund_rank_report import run_fund_rank_report
+from app.fund_rank_report.ai_classifier import (
+    CLASSIFICATION_SEED_PATH,
+    export_fund_sector_classification_seed,
+)
 from app.fund_matcher import load_fund_catalog, match_funds
 from app.report_history import (
     archive_raw_snapshot,
@@ -376,6 +380,18 @@ def cmd_fund_rank_report(args) -> int:
     return 0
 
 
+def cmd_export_fund_rank_seed(args) -> int:
+    config = load_config(args.config)
+    conn = connect(config.storage.db_path)
+    init_db(conn)
+    try:
+        count = export_fund_sector_classification_seed(conn)
+    finally:
+        conn.close()
+    print(f"Exported {count} classification records to {CLASSIFICATION_SEED_PATH}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="股票基金日报工具")
     parser.add_argument("--config", help="配置文件路径，默认读取 config.json")
@@ -442,6 +458,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="生成后发送基金排行榜邮件",
     )
     fund_rank_report_parser.set_defaults(func=cmd_fund_rank_report)
+
+    export_fund_rank_seed_parser = subparsers.add_parser(
+        "export-fund-rank-seed",
+        help="把基金板块分类缓存导出为 Git 可追踪的 seed 文件",
+    )
+    export_fund_rank_seed_parser.set_defaults(func=cmd_export_fund_rank_seed)
     return parser
 
 

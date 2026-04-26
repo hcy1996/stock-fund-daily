@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from dataclasses import asdict
 from pathlib import Path
 
 from app.ai_summary import request_ai_text
+from app.config import PROJECT_ROOT
 from app.config import AIConfig
 from app.fund_rank_report.holdings import ReportFundHoldings, serialize_holding_bundle
 from app.models import FundSectorClassificationRecord
@@ -14,6 +16,7 @@ from app.storage import get_fund_sector_classifications, upsert_fund_sector_clas
 
 CLASSIFICATION_BATCH_SIZE = 20
 CLASSIFICATION_OUTPUT_DIR = Path("eastmoney") / "fund_rank_ai_classification"
+CLASSIFICATION_SEED_PATH = PROJECT_ROOT / "data" / "fund_sector_classifications.seed.json"
 _JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
 
 
@@ -173,6 +176,102 @@ def _row_to_record(row: sqlite3.Row) -> FundSectorClassificationRecord:
     )
 
 
+def _seed_item_to_record(item: dict) -> FundSectorClassificationRecord | None:
+    if not isinstance(item, dict):
+        return None
+
+    fund_code = str(item.get("fund_code", "")).strip()
+    fund_name = str(item.get("fund_name", "")).strip()
+    report_date = str(item.get("report_date", "")).strip()
+    primary_sector = str(item.get("primary_sector", "")).strip()
+    sub_sector = str(item.get("sub_sector", "")).strip()
+    if not all([fund_code, fund_name, report_date, primary_sector, sub_sector]):
+        return None
+
+    raw_payload = item.get("raw_payload")
+    if raw_payload is None:
+        raw_payload = json.dumps(item, ensure_ascii=False)
+
+    return FundSectorClassificationRecord(
+        fund_code=fund_code,
+        fund_name=fund_name,
+        report_date=report_date,
+        primary_sector=primary_sector,
+        sub_sector=sub_sector,
+        reason=str(item.get("reason", "")).strip() or None,
+        confidence=_normalize_confidence(item.get("confidence")),
+        raw_payload=raw_payload,
+        created_at=str(item.get("created_at", "")).strip() or None,
+    )
+
+
+def _record_to_seed_item(record: FundSectorClassificationRecord) -> dict:
+    payload = asdict(record)
+    return {
+        "fund_code": payload["fund_code"],
+        "fund_name": payload["fund_name"],
+        "report_date": payload["report_date"],
+        "primary_sector": payload["primary_sector"],
+        "sub_sector": payload["sub_sector"],
+        "reason": payload["reason"],
+        "confidence": payload["confidence"],
+        "created_at": payload["created_at"],
+    }
+
+
+def load_fund_sector_classification_seed(
+    seed_path: Path = CLASSIFICATION_SEED_PATH,
+) -> list[FundSectorClassificationRecord]:
+    if not seed_path.exists():
+        return []
+
+    payload = json.loads(seed_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError(f"{seed_path} must be a JSON array")
+
+    records: list[FundSectorClassificationRecord] = []
+    for item in payload:
+        record = _seed_item_to_record(item)
+        if record:
+            records.append(record)
+    return records
+
+
+def sync_fund_sector_classification_seed(
+    conn: sqlite3.Connection,
+    seed_path: Path = CLASSIFICATION_SEED_PATH,
+) -> int:
+    records = load_fund_sector_classification_seed(seed_path)
+    if not records:
+        return 0
+    return upsert_fund_sector_classifications(conn, records)
+
+
+def export_fund_sector_classification_seed(
+    conn: sqlite3.Connection,
+    seed_path: Path = CLASSIFICATION_SEED_PATH,
+) -> int:
+    rows = conn.execute(
+        """
+        SELECT *
+        FROM fund_sector_classifications
+        ORDER BY report_date DESC, fund_code ASC
+        """
+    ).fetchall()
+    records = [_row_to_record(row) for row in rows]
+    seed_path.parent.mkdir(parents=True, exist_ok=True)
+    seed_path.write_text(
+        json.dumps(
+            [_record_to_seed_item(record) for record in records],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return len(records)
+
+
 def resolve_fund_sector_classifications(
     conn: sqlite3.Connection,
     ai_config: AIConfig,
@@ -184,6 +283,12 @@ def resolve_fund_sector_classifications(
     if not bundles:
         return {}, []
 
+    warnings: list[str] = []
+    try:
+        sync_fund_sector_classification_seed(conn)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        warnings.append(f"分类 seed 导入失败: {exc}")
+
     bundle_map = {_classification_key(bundle): bundle for bundle in bundles}
     cached_rows = get_fund_sector_classifications(conn, list(bundle_map))
     resolved = {
@@ -191,7 +296,6 @@ def resolve_fund_sector_classifications(
         for key, row in cached_rows.items()
     }
     missing = [bundle for key, bundle in bundle_map.items() if key not in resolved]
-    warnings: list[str] = []
 
     if missing:
         for batch in _chunked(missing, batch_size):

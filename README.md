@@ -139,7 +139,9 @@ curl --location "https://ark.cn-beijing.volces.com/api/v3/responses/<response_id
 
 注意：
 
-- `config.json`、`data/raw/`、`data/*.db`、`output/*.html` 已加入 `.gitignore`
+- `config.json`、大部分 `data/raw/`、`data/*.db`、`output/*.html` 已加入 `.gitignore`
+- 仓库会保留基金排行榜冷启动种子：`data/raw/eastmoney/fund_rank_*.js`、`data/raw/eastmoney/fund_holdings/*.js`、`data/fund_sector_classifications.seed.json`
+- `data/stock_report.db` 是运行时 SQLite，不再提交到 Git；本地和 GitHub Actions 都会在运行时自动把 `data/fund_sector_classifications.seed.json` 导入到 SQLite
 - GitHub runner 默认不保留本地 SQLite 和原始抓取数据，因此邮件发送日志不会自动跨天保留
 - 每次执行完成后会上传当次生成的 HTML 报告 artifact，便于回看
 - workflow 还会把当次报告提交到仓库 `reports/` 目录，并同步更新 `reports/latest.html`
@@ -169,6 +171,7 @@ python3 -m app.cli schedule
 python3 -m app.cli sector-strength --board 盐湖提锂
 python3 -m app.cli sector-strength --board 盐湖提锂 --board 化肥
 python3 -m app.cli fund-rank-report
+python3 -m app.cli export-fund-rank-seed
 ```
 
 ## 独立基金排行榜报告
@@ -183,6 +186,12 @@ python3 -m app.cli fund-rank-report
 
 ```bash
 python3 -m app.cli fund-rank-report --send-email
+```
+
+如果本地跑出新的基金板块分类，需要把最新分类缓存同步回 Git 种子文件：
+
+```bash
+python3 -m app.cli export-fund-rank-seed
 ```
 
 第一阶段当前包含：
@@ -203,6 +212,7 @@ GitHub Actions：
 - workflow：`.github/workflows/fund-rank-report.yml`
 - cron：工作日 `22:30 Asia/Shanghai`，对应 `30 14 * * 1-5`
 - 调度后会先检查当日基金排行榜快照日期；若不是当天，则自动跳过，不发邮件、不更新 Pages
+- workflow 会先恢复 `data/raw` 与 runtime SQLite cache；若 cache 为空，也会先使用仓库里的基金排行榜/持仓 raw 和 `data/fund_sector_classifications.seed.json` 完成冷启动
 - GitHub Pages 子路径：`/fund-rank/`
 
 ## A股板块波段强度评分
