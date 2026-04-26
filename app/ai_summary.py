@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
+from pathlib import Path
 from urllib import error, request
+from zoneinfo import ZoneInfo
 
-from app.config import AIConfig
+from app.config import AIConfig, PROJECT_ROOT
 
 
 SOURCE_LABELS = {
@@ -22,6 +25,7 @@ FUND_PERIOD_LABELS = {
     "week": "近一周",
     "month": "近一月",
 }
+AI_CALL_LOG_ROOT = PROJECT_ROOT / "output" / "ai-calls"
 
 
 def _serialize_components(payload: dict) -> dict[str, list[str]]:
@@ -190,7 +194,49 @@ def _truncate_error_text(value: str, limit: int = 180) -> str:
     return compact[: limit - 3] + "..."
 
 
-def request_ai_text(ai_config: AIConfig, prompt: str) -> tuple[str | None, str | None]:
+def _sanitize_request_label(value: str) -> str:
+    compact = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in value.strip())
+    compact = compact.strip("-_")
+    return compact or "generic"
+
+
+def _write_ai_call_log(
+    request_label: str,
+    prompt: str,
+    attempts: list[dict],
+    *,
+    final_text: str | None,
+    final_warning: str | None,
+) -> Path:
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    day_dir = AI_CALL_LOG_ROOT / now.strftime("%Y-%m-%d")
+    day_dir.mkdir(parents=True, exist_ok=True)
+    safe_label = _sanitize_request_label(request_label)
+    file_path = day_dir / f"{now.strftime('%H%M%S-%f')}-{safe_label}.json"
+    file_path.write_text(
+        json.dumps(
+            {
+                "created_at": now.isoformat(),
+                "request_label": request_label,
+                "prompt": prompt,
+                "attempts": attempts,
+                "final_text": final_text,
+                "final_warning": final_warning,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return file_path
+
+
+def request_ai_text(
+    ai_config: AIConfig,
+    prompt: str,
+    *,
+    request_label: str = "generic",
+) -> tuple[str | None, str | None]:
     if not ai_config.enabled:
         return None, None
     if not ai_config.base_url or not ai_config.api_key or not ai_config.model:
@@ -226,8 +272,19 @@ def request_ai_text(ai_config: AIConfig, prompt: str) -> tuple[str | None, str |
         ),
     ]
     errors: list[str] = []
+    attempts: list[dict] = []
 
     for endpoint_name, endpoint, request_body in endpoints:
+        attempt = {
+            "endpoint_name": endpoint_name,
+            "endpoint": endpoint,
+            "response_id": None,
+            "success": False,
+            "warning": None,
+            "response_payload": None,
+            "response_text": None,
+            "error": None,
+        }
         req = request.Request(
             endpoint,
             data=request_body,
@@ -236,34 +293,74 @@ def request_ai_text(ai_config: AIConfig, prompt: str) -> tuple[str | None, str |
         )
         try:
             with request.urlopen(req, timeout=60) as resp:
-                response_payload = json.loads(resp.read().decode("utf-8"))
+                response_text = resp.read().decode("utf-8")
+                attempt["response_text"] = response_text
+                response_payload = json.loads(response_text)
         except error.HTTPError as exc:
             response_body = exc.read().decode("utf-8", errors="ignore")
+            attempt["error"] = f"HTTP {exc.code}"
+            attempt["response_text"] = response_body
             errors.append(
                 f"{endpoint_name}: HTTP {exc.code} {_truncate_error_text(response_body or str(exc))}"
             )
+            attempts.append(attempt)
             continue
         except error.URLError as exc:
+            attempt["error"] = str(exc.reason)
             errors.append(f"{endpoint_name}: {exc.reason}")
+            attempts.append(attempt)
             continue
         except TimeoutError as exc:
+            attempt["error"] = str(exc)
             errors.append(f"{endpoint_name}: {exc}")
+            attempts.append(attempt)
             continue
         except json.JSONDecodeError as exc:
+            attempt["error"] = f"JSONDecodeError {exc}"
             errors.append(f"{endpoint_name}: JSONDecodeError {exc}")
+            attempts.append(attempt)
             continue
 
+        attempt["response_payload"] = response_payload
+        attempt["response_id"] = response_payload.get("id") if isinstance(response_payload, dict) else None
         text = _extract_text(response_payload)
         if text:
+            attempt["success"] = True
+            attempts.append(attempt)
+            _write_ai_call_log(
+                request_label,
+                prompt,
+                attempts,
+                final_text=text,
+                final_warning=None,
+            )
             return text, None
+        attempt["warning"] = "返回成功，但没有提取到文本内容。"
+        attempts.append(attempt)
         errors.append(f"{endpoint_name}: 返回成功，但没有提取到文本内容。")
     if errors:
-        return None, "AI 请求失败：" + "；".join(errors[:2])
-    return None, "AI 请求失败：未返回可用结果。"
+        warning = "AI 请求失败：" + "；".join(errors[:2])
+        _write_ai_call_log(
+            request_label,
+            prompt,
+            attempts,
+            final_text=None,
+            final_warning=warning,
+        )
+        return None, warning
+    warning = "AI 请求失败：未返回可用结果。"
+    _write_ai_call_log(
+        request_label,
+        prompt,
+        attempts,
+        final_text=None,
+        final_warning=warning,
+    )
+    return None, warning
 
 
 def build_ai_summary_result(ai_config: AIConfig, payload: dict) -> tuple[str | None, str | None]:
-    return request_ai_text(ai_config, build_ai_prompt(payload))
+    return request_ai_text(ai_config, build_ai_prompt(payload), request_label="daily-ai-summary")
 
 
 def _trim_weekly_rankings(rankings: dict[str, dict[str, list[str]]]) -> dict[str, dict[str, list[str]]]:
@@ -315,7 +412,11 @@ def build_weekly_ai_summary_result(
 ) -> tuple[str | None, str | None]:
     if not history_snapshots:
         return None, "近一周综合分析未生成：缺少历史快照。"
-    return request_ai_text(ai_config, build_weekly_ai_prompt(history_snapshots))
+    return request_ai_text(
+        ai_config,
+        build_weekly_ai_prompt(history_snapshots),
+        request_label="weekly-ai-summary",
+    )
 
 
 def build_ai_summary(ai_config: AIConfig, payload: dict) -> str | None:

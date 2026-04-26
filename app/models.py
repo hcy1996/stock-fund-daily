@@ -50,6 +50,9 @@ class FundRankRecord:
     daily_growth_pct: float | None = None
     weekly_growth_pct: float | None = None
     monthly_growth_pct: float | None = None
+    quarter_growth_pct: float | None = None
+    half_year_growth_pct: float | None = None
+    year_growth_pct: float | None = None
     rank_no: int | None = None
     raw_payload: str | None = None
 
@@ -66,6 +69,19 @@ class FundHoldingRecord:
     market_value_wan: float | None = None
     rank_no: int | None = None
     raw_payload: str | None = None
+
+
+@dataclass(slots=True)
+class FundSectorClassificationRecord:
+    fund_code: str
+    fund_name: str
+    report_date: str
+    primary_sector: str
+    sub_sector: str
+    reason: str | None = None
+    confidence: float | None = None
+    raw_payload: str | None = None
+    created_at: str | None = None
 
 
 @dataclass(slots=True)

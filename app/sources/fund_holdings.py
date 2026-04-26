@@ -6,6 +6,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 import re
 import subprocess
+import time
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
@@ -21,6 +22,8 @@ _REPORT_DATE_PATTERN = re.compile(r"截止至：\s*<font[^>]*>\s*(\d{4}-\d{2}-\d
 _FUND_TITLE_PATTERN = re.compile(r"<a\s+title='([^']+)'")
 _TAG_PATTERN = re.compile(r"<[^>]+>")
 _FLOAT_PATTERN = re.compile(r"([+-]?\d+(?:\.\d+)?)")
+HOLDING_REMOTE_REQUEST_INTERVAL_SECONDS = 0.10
+_LAST_HOLDING_REMOTE_REQUEST_AT = 0.0
 
 
 class _TableParser(HTMLParser):
@@ -57,6 +60,15 @@ class _TableParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._current_cell is not None:
             self._current_cell.append(data)
+
+
+def _throttle_holding_remote_requests() -> None:
+    global _LAST_HOLDING_REMOTE_REQUEST_AT
+    now = time.monotonic()
+    wait_seconds = (_LAST_HOLDING_REMOTE_REQUEST_AT + HOLDING_REMOTE_REQUEST_INTERVAL_SECONDS) - now
+    if wait_seconds > 0:
+        time.sleep(wait_seconds)
+    _LAST_HOLDING_REMOTE_REQUEST_AT = time.monotonic()
 
 
 def holdings_raw_path(raw_dir: Path, fund_code: str) -> Path:
@@ -155,6 +167,7 @@ def collect_rank_funds(raw_dir: Path, top_n: int) -> list[FundRankRecord]:
 def fetch_holdings_payload(fund_code: str, user_agent: str, *, year: int | None = None) -> str:
     url = build_holdings_url(fund_code, year=year)
     referer = EASTMONEY_FUND_HOLDINGS_REFERER.format(fund_code=fund_code)
+    _throttle_holding_remote_requests()
     request = Request(
         url,
         headers={
@@ -186,24 +199,56 @@ def fetch_holdings_payload(fund_code: str, user_agent: str, *, year: int | None 
         return completed.stdout
 
 
-def fetch_rank_fund_holdings(raw_dir: Path, user_agent: str, top_n: int) -> int:
+def load_or_fetch_holdings_records(
+    raw_dir: Path,
+    fund_code: str,
+    user_agent: str,
+    *,
+    refresh: bool = False,
+) -> tuple[list[FundHoldingRecord], str | None]:
+    raw_path = holdings_raw_path(raw_dir, fund_code)
+    local_records = parse_holdings_file(raw_path, fund_code) if raw_path.exists() else []
+    if local_records and not refresh:
+        return local_records, None
+
+    current_year = datetime.now(tz=ZoneInfo("Asia/Shanghai")).year
+    payload = fetch_holdings_payload(fund_code, user_agent, year=current_year)
+    records = parse_holdings_payload(payload, fund_code)
+    if not records and current_year > 2000:
+        payload = fetch_holdings_payload(fund_code, user_agent, year=current_year - 1)
+        records = parse_holdings_payload(payload, fund_code)
+    if not records:
+        if local_records:
+            return local_records, f"{fund_code} 持仓补抓后为空，继续使用本地缓存。"
+        if refresh:
+            return [], f"{fund_code} 持仓刷新后为空。"
+        return [], f"{fund_code} 持仓补抓后为空。"
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_text(payload, encoding="utf-8")
+    return records, None
+
+
+def fetch_rank_fund_holdings(
+    raw_dir: Path,
+    user_agent: str,
+    top_n: int,
+    *,
+    refresh: bool = True,
+) -> int:
     funds = collect_rank_funds(raw_dir, top_n)
-    output_dir = raw_dir / EASTMONEY_FUND_HOLDINGS_DIR
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     updated = 0
-    current_year = datetime.now(tz=ZoneInfo("Asia/Shanghai")).year
     for fund in funds:
         try:
-            payload = fetch_holdings_payload(fund.fund_code, user_agent, year=current_year)
-            records = parse_holdings_payload(payload, fund.fund_code)
-            if not records and current_year > 2000:
-                payload = fetch_holdings_payload(fund.fund_code, user_agent, year=current_year - 1)
-                records = parse_holdings_payload(payload, fund.fund_code)
+            records, _warning = load_or_fetch_holdings_records(
+                raw_dir,
+                fund.fund_code,
+                user_agent,
+                refresh=refresh,
+            )
         except (OSError, subprocess.CalledProcessError):
             continue
         if not records:
             continue
-        holdings_raw_path(raw_dir, fund.fund_code).write_text(payload, encoding="utf-8")
         updated += 1
     return updated

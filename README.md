@@ -76,7 +76,22 @@ python3 -m app.cli run-once
 
 - `data/archive/raw/<YYYY-MM-DD>/`：当天抓取的原始文件快照，仅本地保留
 - `output/<YYYY-MM-DD>-*.txt|json`：当天 AI prompt、AI 结果与分析快照
+- `output/ai-calls/<YYYY-MM-DD>/`：每次 AI 调用的本地日志，包含 `prompt`、原始响应、提取文本、`response_id`
 - `reports/history/<YYYY-MM-DD>/`：会进入仓库的轻量历史快照，供后续近一周综合分析复用
+
+如果使用火山方舟兼容接口，拿到 AI 返回的 `response_id` 后，可用下面的方式回查历史响应详情：
+
+```bash
+curl --location "https://ark.cn-beijing.volces.com/api/v3/responses/<response_id>" \
+  --header "Authorization: Bearer <api_key>" \
+  --header "Content-Type: application/json"
+```
+
+说明：
+
+- `response_id` 一般来自接口返回的顶层 `id`
+- 该请求用于查询历史 AI 对话/响应详情，不会重新生成内容
+- 本项目本地 `output/ai-calls/<YYYY-MM-DD>/` 日志里也会保留 `response_id`
 
 配置方式：
 
@@ -149,7 +164,29 @@ python3 -m app.cli run-once
 python3 -m app.cli schedule
 python3 -m app.cli sector-strength --board 盐湖提锂
 python3 -m app.cli sector-strength --board 盐湖提锂 --board 化肥
+python3 -m app.cli fund-rank-report
 ```
+
+## 独立基金排行榜报告
+
+新增一个不影响现有日报链路的独立报告入口：
+
+```bash
+python3 -m app.cli fund-rank-report
+```
+
+第一阶段当前包含：
+
+- 天天基金 `今日 / 近一周 / 近一月 / 近三月 / 近六月 / 近一年` 各前 `300`
+- 阶段内 `A/C` 去重，优先保留 `C`
+- 跨阶段重复出现率分析
+- 独立 `HTML / JSON / summary` 输出
+
+输出目录：
+
+- `output/fund-rank/<trade_date>/report.html`
+- `output/fund-rank/<trade_date>/result.json`
+- `output/fund-rank/<trade_date>/summary.txt`
 
 ## A股板块波段强度评分
 

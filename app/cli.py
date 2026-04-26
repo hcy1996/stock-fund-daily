@@ -16,6 +16,7 @@ from app.ai_summary import (
 from app.config import PROJECT_ROOT, load_config
 from app.emailer import send_html_email
 from app.fetch_status import fetch_succeeded, load_fetch_status
+from app.fund_rank_report import run_fund_rank_report
 from app.fund_matcher import load_fund_catalog, match_funds
 from app.report_history import (
     archive_raw_snapshot,
@@ -170,7 +171,11 @@ def generate_report(config) -> tuple[Path, str, str]:
     payload["sector_bridge_ai_warning"] = bridge_ai_warning
 
     daily_ai_prompt = build_ai_prompt(payload)
-    ai_summary, ai_warning = request_ai_text(config.ai, daily_ai_prompt)
+    ai_summary, ai_warning = request_ai_text(
+        config.ai,
+        daily_ai_prompt,
+        request_label="daily-ai-summary",
+    )
     payload["ai_summary"] = ai_summary
     payload["ai_summary_warning"] = ai_warning
     if ai_warning:
@@ -193,7 +198,11 @@ def generate_report(config) -> tuple[Path, str, str]:
     )
     weekly_history = recent_snapshots + [snapshot]
     weekly_ai_prompt = build_weekly_ai_prompt(weekly_history)
-    weekly_ai_summary, weekly_ai_warning = request_ai_text(config.ai, weekly_ai_prompt)
+    weekly_ai_summary, weekly_ai_warning = request_ai_text(
+        config.ai,
+        weekly_ai_prompt,
+        request_label="weekly-ai-summary",
+    )
     payload["weekly_ai_summary"] = weekly_ai_summary
     payload["weekly_ai_warning"] = weekly_ai_warning
     if weekly_ai_warning:
@@ -320,6 +329,25 @@ def cmd_sector_strength(args) -> int:
     return 0
 
 
+def cmd_fund_rank_report(args) -> int:
+    config = load_config(args.config)
+    try:
+        json_path, summary_path, html_path, summary_text = run_fund_rank_report(
+            config,
+            top_n=args.top_n,
+            refresh_ranks=args.refresh_ranks,
+            refresh_holdings=args.refresh_holdings,
+        )
+    except Exception as exc:
+        print(f"fund-rank-report failed: {exc}")
+        return 1
+    print(summary_text)
+    print(f"JSON: {json_path}")
+    print(f"SUMMARY: {summary_path}")
+    print(f"HTML: {html_path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="股票基金日报工具")
     parser.add_argument("--config", help="配置文件路径，默认读取 config.json")
@@ -359,6 +387,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="每类候选池板块数量，默认 50；默认会合并概念和行业两类候选池",
     )
     sector_strength_parser.set_defaults(func=cmd_sector_strength)
+
+    fund_rank_report_parser = subparsers.add_parser(
+        "fund-rank-report",
+        help="生成独立基金排行榜报告",
+    )
+    fund_rank_report_parser.add_argument(
+        "--top-n",
+        type=int,
+        default=300,
+        help="每个阶段抓取前 N 条基金，默认 300",
+    )
+    fund_rank_report_parser.add_argument(
+        "--refresh-ranks",
+        action="store_true",
+        help="显式刷新基金排行榜 raw，默认只读本地缓存",
+    )
+    fund_rank_report_parser.add_argument(
+        "--refresh-holdings",
+        action="store_true",
+        help="显式刷新基金持仓 raw，默认只读本地缓存",
+    )
+    fund_rank_report_parser.set_defaults(func=cmd_fund_rank_report)
     return parser
 
 

@@ -1,0 +1,60 @@
+{
+  "created_at": "2026-04-26T18:16:47.770593+08:00",
+  "request_label": "fund-sector-classification",
+  "prompt": "你是A股基金持仓板块归类助手。根据基金名称、基金代码、持仓截止时间、前十大持仓股票，判断每只基金最相关的一个大板块和一个细分板块。不要输出 markdown，不要解释规则外内容，只返回 JSON。JSON 格式必须是：{\"results\":[{\"fund_code\":\"\",\"report_date\":\"\",\"primary_sector\":\"\",\"sub_sector\":\"\",\"reason\":\"\",\"confidence\":0.0}]}其中 confidence 取 0 到 1。输入数据：{\"funds\":[{\"fund_code\":\"012083\",\"fund_name\":\"博时数字经济混合C\",\"report_date\":\"2026-03-31\",\"holdings\":[{\"stock_code\":\"688498\",\"stock_name\":\"源杰科技\",\"net_value_ratio\":4.99,\"rank_no\":1},{\"stock_code\":\"300502\",\"stock_name\":\"新易盛\",\"net_value_ratio\":4.83,\"rank_no\":2},{\"stock_code\":\"002938\",\"stock_name\":\"鹏鼎控股\",\"net_value_ratio\":4.64,\"rank_no\":3},{\"stock_code\":\"601869\",\"stock_name\":\"长飞光纤\",\"net_value_ratio\":4.57,\"rank_no\":4},{\"stock_code\":\"688676\",\"stock_name\":\"金盘科技\",\"net_value_ratio\":4.56,\"rank_no\":5},{\"stock_code\":\"688008\",\"stock_name\":\"澜起科技\",\"net_value_ratio\":3.56,\"rank_no\":6},{\"stock_code\":\"600487\",\"stock_name\":\"亨通光电\",\"net_value_ratio\":3.24,\"rank_no\":7},{\"stock_code\":\"002138\",\"stock_name\":\"顺络电子\",\"net_value_ratio\":2.89,\"rank_no\":8},{\"stock_code\":\"688521\",\"stock_name\":\"芯原股份\",\"net_value_ratio\":2.86,\"rank_no\":9},{\"stock_code\":\"002970\",\"stock_name\":\"锐明技术\",\"net_value_ratio\":2.69,\"rank_no\":10}]},{\"fund_code\":\"018326\",\"fund_name\":\"国泰海通创新成长混合发起C\",\"report_date\":\"2026-03-31\",\"holdings\":[{\"stock_code\":\"603061\",\"stock_name\":\"金海通\",\"net_value_ratio\":5.83,\"rank_no\":1},{\"stock_code\":\"002384\",\"stock_name\":\"东山精密\",\"net_value_ratio\":5.68,\"rank_no\":2},{\"stock_code\":\"300666\",\"stock_name\":\"江丰电子\",\"net_value_ratio\":5.36,\"rank_no\":3},{\"stock_code\":\"688627\",\"stock_name\":\"精智达\",\"net_value_ratio\":5.02,\"rank_no\":4},{\"stock_code\":\"688052\",\"stock_name\":\"纳芯微\",\"net_value_ratio\":4.82,\"rank_no\":5},{\"stock_code\":\"603986\",\"stock_name\":\"兆易创新\",\"net_value_ratio\":4.78,\"rank_no\":6},{\"stock_code\":\"688256\",\"stock_name\":\"寒武纪\",\"net_value_ratio\":4.77,\"rank_no\":7},{\"stock_code\":\"300623\",\"stock_name\":\"捷捷微电\",\"net_value_ratio\":4.77,\"rank_no\":8},{\"stock_code\":\"300373\",\"stock_name\":\"扬杰科技\",\"net_value_ratio\":4.74,\"rank_no\":9},{\"stock_code\":\"688702\",\"stock_name\":\"盛科通信\",\"net_value_ratio\":4.7,\"rank_no\":10}]},{\"fund_code\":\"019003\",\"fund_name\":\"易方达科技智选混合A\",\"report_date\":\"2026-03-31\",\"holdings\":[{\"stock_code\":\"300502\",\"stock_name\":\"新易盛\",\"net_value_ratio\":9.85,\"rank_no\":1},{\"stock_code\":\"300308\",\"stock_name\":\"中际旭创\",\"net_value_ratio\":8.01,\"rank_no\":2},{\"stock_code\":\"002384\",\"stock_name\":\"东山精密\",\"net_value_ratio\":6.43,\"rank_no\":3},{\"stock_code\":\"600487\",\"stock_name\":\"亨通光电\",\"net_value_ratio\":5.53,\"rank_no\":4},{\"stock_code\":\"002463\",\"stock_name\":\"沪电股份\",\"net_value_ratio\":3.36,\"rank_no\":6},{\"stock_code\":\"688521\",\"stock_name\":\"芯原股份\",\"net_value_ratio\":2.91,\"rank_no\":7},{\"stock_code\":\"300014\",\"stock_name\":\"亿纬锂能\",\"net_value_ratio\":2.62,\"rank_no\":8},{\"stock_code\":\"002916\",\"stock_name\":\"深南电路\",\"net_value_ratio\":2.38,\"rank_no\":9},{\"stock_code\":\"688372\",\"stock_name\":\"伟测科技\",\"net_value_ratio\":2.23,\"rank_no\":10}]},{\"fund_code\":\"019004\",\"fund_name\":\"易方达科技智选混合C\",\"report_date\":\"2026-03-31\",\"holdings\":[{\"stock_code\":\"300502\",\"stock_name\":\"新易盛\",\"net_value_ratio\":9.85,\"rank_no\":1},{\"stock_code\":\"300308\",\"stock_name\":\"中际旭创\",\"net_value_ratio\":8.01,\"rank_no\":2},{\"stock_code\":\"002384\",\"stock_name\":\"东山精密\",\"net_value_ratio\":6.43,\"rank_no\":3},{\"stock_code\":\"600487\",\"stock_name\":\"亨通光电\",\"net_value_ratio\":5.53,\"rank_no\":4},{\"stock_code\":\"002463\",\"stock_name\":\"沪电股份\",\"net_value_ratio\":3.36,\"rank_no\":6},{\"stock_code\":\"688521\",\"stock_name\":\"芯原股份\",\"net_value_ratio\":2.91,\"rank_no\":7},{\"stock_code\":\"300014\",\"stock_name\":\"亿纬锂能\",\"net_value_ratio\":2.62,\"rank_no\":8},{\"stock_code\":\"002916\",\"stock_name\":\"深南电路\",\"net_value_ratio\":2.38,\"rank_no\":9},{\"stock_code\":\"688372\",\"stock_name\":\"伟测科技\",\"net_value_ratio\":2.23,\"rank_no\":10}]},{\"fund_code\":\"050010\",\"fund_name\":\"博时特许价值混合A\",\"report_date\":\"2026-03-31\",\"holdings\":[{\"stock_code\":\"002384\",\"stock_name\":\"东山精密\",\"net_value_ratio\":8.89,\"rank_no\":1},{\"stock_code\":\"300308\",\"stock_name\":\"中际旭创\",\"net_value_ratio\":7.14,\"rank_no\":2},{\"stock_code\":\"300502\",\"stock_name\":\"新易盛\",\"net_value_ratio\":7.13,\"rank_no\":3},{\"stock_code\":\"300475\",\"stock_name\":\"香农芯创\",\"net_value_ratio\":5.43,\"rank_no\":4},{\"stock_code\":\"300476\",\"stock_name\":\"胜宏科技\",\"net_value_ratio\":5.08,\"rank_no\":5},{\"stock_code\":\"688256\",\"stock_name\":\"寒武纪\",\"net_value_ratio\":4.85,\"rank_no\":6},{\"stock_code\":\"300570\",\"stock_name\":\"太辰光\",\"net_value_ratio\":4.69,\"rank_no\":7},{\"stock_code\":\"300394\",\"stock_name\":\"天孚通信\",\"net_value_ratio\":3.98,\"rank_no\":8},{\"stock_code\":\"688603\",\"stock_name\":\"天承科技\",\"net_value_ratio\":3.67,\"rank_no\":9},{\"stock_code\":\"688676\",\"stock_name\":\"金盘科技\",\"net_value_ratio\":3.22,\"rank_no\":10}]}]}",
+  "attempts": [
+    {
+      "endpoint_name": "responses",
+      "endpoint": "https://ark.cn-beijing.volces.com/api/v3/responses",
+      "response_id": "resp_0217771985982004087c9e55f8b322b82cd17f72450d06ee778e3",
+      "success": true,
+      "warning": null,
+      "response_payload": {
+        "created_at": 1777198599,
+        "id": "resp_0217771985982004087c9e55f8b322b82cd17f72450d06ee778e3",
+        "max_output_tokens": 32768,
+        "model": "doubao-seed-2-0-lite-260215",
+        "object": "response",
+        "output": [
+          {
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "{\"results\":[{\"fund_code\":\"012083\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"光通信\",\"reason\":\"基金名称为数字经济主题，前十大持仓多为光芯片、光光纤、光模块相关的光通信产业链个股，属于TMT大板块下的光通信细分领域\",\"confidence\":0.9},{\"fund_code\":\"018326\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"半导体\",\"reason\":\"前十大持仓涵盖半导体设备材料、设计、制造、封测测全产业链个股，全部属于半导体领域，归属TMT大板块\",\"confidence\":0.95},{\"fund_code\":\"019003\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"光通信\",\"reason\":\"前两大持仓为光模块龙头企业，多数持仓围绕光通信产业链上下游，属于TMT大板块下的光通信细分领域\",\"confidence\":0.92},{\"fund_code\":\"019004\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"光通信\",\"reason\":\"持仓与易方达科技智选混合A完全一致，前两大持仓为光模块龙头企业，多数持仓围绕光通信产业链上下游，属于TMT大板块下的光通信细分领域\",\"confidence\":0.92},{\"fund_code\":\"050010\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"光通信\",\"reason\":\"前三大持仓均为光通信核心标的，多数持仓围绕光通信产业链的PCB、光器件、光模块等环节，属于TMT大板块下的光通信细分领域\",\"confidence\":0.93}]}"
+              }
+            ],
+            "status": "completed",
+            "id": "msg_02177719859934800000000000000000000ffffac154e96cdbac3"
+          }
+        ],
+        "thinking": {
+          "type": "disabled"
+        },
+        "service_tier": "default",
+        "status": "completed",
+        "usage": {
+          "input_tokens": 1851,
+          "output_tokens": 422,
+          "total_tokens": 2273,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "caching": {
+          "type": "disabled"
+        },
+        "store": true,
+        "expire_at": 1777457798
+      },
+      "response_text": "{\"created_at\":1777198599,\"id\":\"resp_0217771985982004087c9e55f8b322b82cd17f72450d06ee778e3\",\"max_output_tokens\":32768,\"model\":\"doubao-seed-2-0-lite-260215\",\"object\":\"response\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"{\\\"results\\\":[{\\\"fund_code\\\":\\\"012083\\\",\\\"report_date\\\":\\\"2026-03-31\\\",\\\"primary_sector\\\":\\\"TMT\\\",\\\"sub_sector\\\":\\\"光通信\\\",\\\"reason\\\":\\\"基金名称为数字经济主题，前十大持仓多为光芯片、光光纤、光模块相关的光通信产业链个股，属于TMT大板块下的光通信细分领域\\\",\\\"confidence\\\":0.9},{\\\"fund_code\\\":\\\"018326\\\",\\\"report_date\\\":\\\"2026-03-31\\\",\\\"primary_sector\\\":\\\"TMT\\\",\\\"sub_sector\\\":\\\"半导体\\\",\\\"reason\\\":\\\"前十大持仓涵盖半导体设备材料、设计、制造、封测测全产业链个股，全部属于半导体领域，归属TMT大板块\\\",\\\"confidence\\\":0.95},{\\\"fund_code\\\":\\\"019003\\\",\\\"report_date\\\":\\\"2026-03-31\\\",\\\"primary_sector\\\":\\\"TMT\\\",\\\"sub_sector\\\":\\\"光通信\\\",\\\"reason\\\":\\\"前两大持仓为光模块龙头企业，多数持仓围绕光通信产业链上下游，属于TMT大板块下的光通信细分领域\\\",\\\"confidence\\\":0.92},{\\\"fund_code\\\":\\\"019004\\\",\\\"report_date\\\":\\\"2026-03-31\\\",\\\"primary_sector\\\":\\\"TMT\\\",\\\"sub_sector\\\":\\\"光通信\\\",\\\"reason\\\":\\\"持仓与易方达科技智选混合A完全一致，前两大持仓为光模块龙头企业，多数持仓围绕光通信产业链上下游，属于TMT大板块下的光通信细分领域\\\",\\\"confidence\\\":0.92},{\\\"fund_code\\\":\\\"050010\\\",\\\"report_date\\\":\\\"2026-03-31\\\",\\\"primary_sector\\\":\\\"TMT\\\",\\\"sub_sector\\\":\\\"光通信\\\",\\\"reason\\\":\\\"前三大持仓均为光通信核心标的，多数持仓围绕光通信产业链的PCB、光器件、光模块等环节，属于TMT大板块下的光通信细分领域\\\",\\\"confidence\\\":0.93}]}\"}],\"status\":\"completed\",\"id\":\"msg_02177719859934800000000000000000000ffffac154e96cdbac3\"}],\"thinking\":{\"type\":\"disabled\"},\"service_tier\":\"default\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1851,\"output_tokens\":422,\"total_tokens\":2273,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}},\"caching\":{\"type\":\"disabled\"},\"store\":true,\"expire_at\":1777457798}",
+      "error": null
+    }
+  ],
+  "final_text": "{\"results\":[{\"fund_code\":\"012083\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"光通信\",\"reason\":\"基金名称为数字经济主题，前十大持仓多为光芯片、光光纤、光模块相关的光通信产业链个股，属于TMT大板块下的光通信细分领域\",\"confidence\":0.9},{\"fund_code\":\"018326\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"半导体\",\"reason\":\"前十大持仓涵盖半导体设备材料、设计、制造、封测测全产业链个股，全部属于半导体领域，归属TMT大板块\",\"confidence\":0.95},{\"fund_code\":\"019003\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"光通信\",\"reason\":\"前两大持仓为光模块龙头企业，多数持仓围绕光通信产业链上下游，属于TMT大板块下的光通信细分领域\",\"confidence\":0.92},{\"fund_code\":\"019004\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"光通信\",\"reason\":\"持仓与易方达科技智选混合A完全一致，前两大持仓为光模块龙头企业，多数持仓围绕光通信产业链上下游，属于TMT大板块下的光通信细分领域\",\"confidence\":0.92},{\"fund_code\":\"050010\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"TMT\",\"sub_sector\":\"光通信\",\"reason\":\"前三大持仓均为光通信核心标的，多数持仓围绕光通信产业链的PCB、光器件、光模块等环节，属于TMT大板块下的光通信细分领域\",\"confidence\":0.93}]}",
+  "final_warning": null
+}

@@ -85,5 +85,9 @@ def request_sector_bridge_ai_summary(
     bridge_payload: dict,
 ) -> tuple[str | None, str | None, str]:
     prompt = build_sector_bridge_ai_prompt(report_payload, bridge_payload)
-    summary, warning = request_ai_text(ai_config, prompt)
+    summary, warning = request_ai_text(
+        ai_config,
+        prompt,
+        request_label="sector-bridge-ai-summary",
+    )
     return summary, warning, prompt

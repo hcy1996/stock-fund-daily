@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from app.models import FundRankRecord
 
@@ -32,13 +34,38 @@ EASTMONEY_FUND_RANK_PERIODS = {
         "title": "近一月基金排行",
         "value_label": "近1月",
     },
+    "quarter": {
+        "filename": "fund_rank_quarter.js",
+        "status_days": 90,
+        "sort_field": "3yzf",
+        "title": "近三月基金排行",
+        "value_label": "近3月",
+    },
+    "half_year": {
+        "filename": "fund_rank_half_year.js",
+        "status_days": 180,
+        "sort_field": "6yzf",
+        "title": "近六月基金排行",
+        "value_label": "近6月",
+    },
+    "year": {
+        "filename": "fund_rank_year.js",
+        "status_days": 365,
+        "sort_field": "1nzf",
+        "title": "近一年基金排行",
+        "value_label": "近1年",
+    },
 }
 EASTMONEY_FUND_RANK_SOURCE = "eastmoney_fund_rank"
-EASTMONEY_FUND_RANK_PAGE_SIZE = 50
+EASTMONEY_FUND_RANK_PAGE_SIZE = 150
 _DATAS_PATTERN = re.compile(r"datas\s*:\s*(\[.*?\])\s*,\s*allRecords", re.S)
 
 
-def build_rank_url(period: str, page_size: int = EASTMONEY_FUND_RANK_PAGE_SIZE) -> str:
+def build_rank_url(
+    period: str,
+    page_size: int = EASTMONEY_FUND_RANK_PAGE_SIZE,
+    page_index: int = 1,
+) -> str:
     config = EASTMONEY_FUND_RANK_PERIODS[period]
     query = urlencode(
         {
@@ -49,7 +76,7 @@ def build_rank_url(period: str, page_size: int = EASTMONEY_FUND_RANK_PAGE_SIZE) 
             "gs": "0",
             "sc": config["sort_field"],
             "st": "desc",
-            "pi": "1",
+            "pi": str(page_index),
             "pn": str(page_size),
             "dx": "1",
         }
@@ -112,6 +139,9 @@ def parse_rank_payload(raw_payload: str, period: str) -> list[FundRankRecord]:
                 daily_growth_pct=_to_float(_field(fields, 6)),
                 weekly_growth_pct=_to_float(_field(fields, 7)),
                 monthly_growth_pct=_to_float(_field(fields, 8)),
+                quarter_growth_pct=_to_float(_field(fields, 9)),
+                half_year_growth_pct=_to_float(_field(fields, 10)),
+                year_growth_pct=_to_float(_field(fields, 11)),
                 rank_no=index,
                 raw_payload=row,
             )
@@ -123,3 +153,42 @@ def parse_rank_file(path: Path, period: str) -> list[FundRankRecord]:
     if not path.exists():
         return []
     return parse_rank_payload(path.read_text(encoding="utf-8-sig"), period)
+
+
+def fetch_rank_payload(
+    period: str,
+    user_agent: str,
+    *,
+    page_size: int = EASTMONEY_FUND_RANK_PAGE_SIZE,
+    page_index: int = 1,
+) -> str:
+    url = build_rank_url(period, page_size=page_size, page_index=page_index)
+    request = Request(
+        url,
+        headers={
+            "User-Agent": user_agent,
+            "Referer": EASTMONEY_FUND_RANK_REFERER,
+        },
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            return response.read().decode("utf-8", errors="ignore")
+    except OSError:
+        completed = subprocess.run(
+            [
+                "curl",
+                "-L",
+                "--silent",
+                "--show-error",
+                "--fail",
+                "-A",
+                user_agent,
+                "-H",
+                f"Referer: {EASTMONEY_FUND_RANK_REFERER}",
+                url,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return completed.stdout

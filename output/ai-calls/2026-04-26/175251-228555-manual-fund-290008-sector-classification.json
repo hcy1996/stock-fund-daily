@@ -1,0 +1,60 @@
+{
+  "created_at": "2026-04-26T17:52:51.228555+08:00",
+  "request_label": "manual-fund-290008-sector-classification",
+  "prompt": "你是A股基金持仓板块归类助手。根据基金名称、基金代码、持仓截止时间、前十大持仓股票，判断每只基金最相关的一个大板块和一个细分板块。不要输出 markdown，不要解释规则外内容，只返回 JSON。JSON 格式必须是：{\"results\":[{\"fund_code\":\"\",\"report_date\":\"\",\"primary_sector\":\"\",\"sub_sector\":\"\",\"reason\":\"\",\"confidence\":0.0}]}其中 confidence 取 0 到 1。输入数据：{\"funds\":[{\"fund_code\":\"290008\",\"fund_name\":\"泰信发展主题混合\",\"report_date\":\"2026-03-31\",\"holdings\":[{\"stock_code\":\"300390\",\"stock_name\":\"天华新能\",\"net_value_ratio\":9.97,\"rank_no\":1},{\"stock_code\":\"002738\",\"stock_name\":\"中矿资源\",\"net_value_ratio\":9.94,\"rank_no\":2},{\"stock_code\":\"002240\",\"stock_name\":\"盛新锂能\",\"net_value_ratio\":9.9,\"rank_no\":3},{\"stock_code\":\"002497\",\"stock_name\":\"雅化集团\",\"net_value_ratio\":9.45,\"rank_no\":4},{\"stock_code\":\"002756\",\"stock_name\":\"永兴材料\",\"net_value_ratio\":9.33,\"rank_no\":5},{\"stock_code\":\"000688\",\"stock_name\":\"国城矿业\",\"net_value_ratio\":9.04,\"rank_no\":6},{\"stock_code\":\"000762\",\"stock_name\":\"西藏矿业\",\"net_value_ratio\":8.5,\"rank_no\":7},{\"stock_code\":\"002192\",\"stock_name\":\"融捷股份\",\"net_value_ratio\":6.87,\"rank_no\":8},{\"stock_code\":\"000792\",\"stock_name\":\"盐湖股份\",\"net_value_ratio\":5.74,\"rank_no\":9},{\"stock_code\":\"002460\",\"stock_name\":\"赣锋锂业\",\"net_value_ratio\":4.34,\"rank_no\":10}]}]}",
+  "attempts": [
+    {
+      "endpoint_name": "responses",
+      "endpoint": "https://ark.cn-beijing.volces.com/api/v3/responses",
+      "response_id": "resp_02177719716826642e276d595e9cfc376ad966d4ec212467d872e",
+      "success": true,
+      "warning": null,
+      "response_payload": {
+        "created_at": 1777197169,
+        "id": "resp_02177719716826642e276d595e9cfc376ad966d4ec212467d872e",
+        "max_output_tokens": 32768,
+        "model": "doubao-seed-2-0-lite-260215",
+        "object": "response",
+        "output": [
+          {
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "{\"results\":[{\"fund_code\":\"290008\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"新能源\",\"sub_sector\":\"锂矿与锂盐\",\"reason\":\"该基金前十大持仓全部为锂资源及锂加工相关上市公司，均属于新能源赛道下的锂产业链，持仓集中度极高\",\"confidence\":0.99}]}"
+              }
+            ],
+            "status": "completed",
+            "id": "msg_02177719716929500000000000000000000ffffac1911679c3c2f"
+          }
+        ],
+        "thinking": {
+          "type": "disabled"
+        },
+        "service_tier": "default",
+        "status": "completed",
+        "usage": {
+          "input_tokens": 504,
+          "output_tokens": 83,
+          "total_tokens": 587,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "caching": {
+          "type": "disabled"
+        },
+        "store": true,
+        "expire_at": 1777456368
+      },
+      "response_text": "{\"created_at\":1777197169,\"id\":\"resp_02177719716826642e276d595e9cfc376ad966d4ec212467d872e\",\"max_output_tokens\":32768,\"model\":\"doubao-seed-2-0-lite-260215\",\"object\":\"response\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"{\\\"results\\\":[{\\\"fund_code\\\":\\\"290008\\\",\\\"report_date\\\":\\\"2026-03-31\\\",\\\"primary_sector\\\":\\\"新能源\\\",\\\"sub_sector\\\":\\\"锂矿与锂盐\\\",\\\"reason\\\":\\\"该基金前十大持仓全部为锂资源及锂加工相关上市公司，均属于新能源赛道下的锂产业链，持仓集中度极高\\\",\\\"confidence\\\":0.99}]}\"}],\"status\":\"completed\",\"id\":\"msg_02177719716929500000000000000000000ffffac1911679c3c2f\"}],\"thinking\":{\"type\":\"disabled\"},\"service_tier\":\"default\",\"status\":\"completed\",\"usage\":{\"input_tokens\":504,\"output_tokens\":83,\"total_tokens\":587,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}},\"caching\":{\"type\":\"disabled\"},\"store\":true,\"expire_at\":1777456368}",
+      "error": null
+    }
+  ],
+  "final_text": "{\"results\":[{\"fund_code\":\"290008\",\"report_date\":\"2026-03-31\",\"primary_sector\":\"新能源\",\"sub_sector\":\"锂矿与锂盐\",\"reason\":\"该基金前十大持仓全部为锂资源及锂加工相关上市公司，均属于新能源赛道下的锂产业链，持仓集中度极高\",\"confidence\":0.99}]}",
+  "final_warning": null
+}

@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-from app.models import FundHoldingRecord, FundRankRecord, SectorFlowRecord
+from app.models import (
+    FundHoldingRecord,
+    FundRankRecord,
+    FundSectorClassificationRecord,
+    SectorFlowRecord,
+)
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -80,6 +87,19 @@ def init_db(conn: sqlite3.Connection) -> None:
             rank_no INTEGER,
             raw_payload TEXT,
             PRIMARY KEY (fund_code, report_date, stock_code)
+        );
+
+        CREATE TABLE IF NOT EXISTS fund_sector_classifications (
+            fund_code TEXT NOT NULL,
+            fund_name TEXT NOT NULL,
+            report_date TEXT NOT NULL,
+            primary_sector TEXT NOT NULL,
+            sub_sector TEXT NOT NULL,
+            reason TEXT,
+            confidence REAL,
+            raw_payload TEXT,
+            created_at TEXT,
+            PRIMARY KEY (fund_code, report_date)
         );
         """
     )
@@ -261,6 +281,44 @@ def upsert_fund_holdings(conn: sqlite3.Connection, records: list[FundHoldingReco
     return len(records)
 
 
+def upsert_fund_sector_classifications(
+    conn: sqlite3.Connection,
+    records: list[FundSectorClassificationRecord],
+) -> int:
+    if not records:
+        return 0
+
+    now = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
+    payloads = []
+    for record in records:
+        payload = asdict(record)
+        payload["created_at"] = payload.get("created_at") or now
+        payloads.append(payload)
+
+    conn.executemany(
+        """
+        INSERT INTO fund_sector_classifications (
+            fund_code, fund_name, report_date, primary_sector, sub_sector,
+            reason, confidence, raw_payload, created_at
+        ) VALUES (
+            :fund_code, :fund_name, :report_date, :primary_sector, :sub_sector,
+            :reason, :confidence, :raw_payload, :created_at
+        )
+        ON CONFLICT(fund_code, report_date) DO UPDATE SET
+            fund_name=excluded.fund_name,
+            primary_sector=excluded.primary_sector,
+            sub_sector=excluded.sub_sector,
+            reason=excluded.reason,
+            confidence=excluded.confidence,
+            raw_payload=excluded.raw_payload,
+            created_at=excluded.created_at
+        """,
+        payloads,
+    )
+    conn.commit()
+    return len(records)
+
+
 def latest_trade_date(conn: sqlite3.Connection) -> str | None:
     row = conn.execute(
         """
@@ -361,6 +419,29 @@ def get_latest_fund_holdings(
             )
         )
     return holdings
+
+
+def get_fund_sector_classifications(
+    conn: sqlite3.Connection,
+    fund_report_dates: list[tuple[str, str]],
+) -> dict[tuple[str, str], sqlite3.Row]:
+    if not fund_report_dates:
+        return {}
+
+    placeholders = ",".join(["(?, ?)"] * len(fund_report_dates))
+    params = [value for item in fund_report_dates for value in item]
+    rows = conn.execute(
+        f"""
+        SELECT *
+        FROM fund_sector_classifications
+        WHERE (fund_code, report_date) IN ({placeholders})
+        """,
+        params,
+    )
+    return {
+        (row["fund_code"], row["report_date"]): row
+        for row in rows
+    }
 
 
 def get_recent_daily_rows(conn: sqlite3.Connection, limit_days: int) -> list[sqlite3.Row]:
