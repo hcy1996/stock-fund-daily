@@ -5,5 +5,8 @@ __pycache__/
 
 config.json
 output/*.html
+output/*.txt
+output/*.json
 data/raw/
+data/archive/
 data/*.db

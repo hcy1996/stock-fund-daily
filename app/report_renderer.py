@@ -15,6 +15,7 @@ from app.models import (
     WindowSection,
 )
 from app.raw_enricher import TONGHUASHUN_CONCEPT_DETAIL_URL, TONGHUASHUN_CONCEPT_INDEX_URL
+from app.sector_bridge_renderer import render_sector_bridge_section
 from app.sources.tonghuashun import (
     TONGHUASHUN_10D_URL,
     TONGHUASHUN_1D_URL,
@@ -436,45 +437,73 @@ def _render_markdown_blocks(text: str) -> str:
     return "".join(parts)
 
 
-def _render_ai_summary(summary_text: str | None) -> str:
+def _render_ai_summary(
+    summary_text: str | None,
+    *,
+    title: str,
+    anchor_id: str | None = None,
+) -> str:
     if not summary_text:
         return ""
     summary_text = summary_text.strip()
     if not summary_text:
         return ""
     content = _render_markdown_blocks(summary_text)
+    section_id = f' id="{escape(anchor_id)}"' if anchor_id else ""
     return f"""
-    <section class="ai-card">
-      <h2>AI 归类参考</h2>
+    <section{section_id} class="ai-card anchor-section">
+      <h2>{escape(title)}</h2>
       <div class="ai-content">{content}</div>
       <p class="ai-note">仅供参考，不构成投资建议。</p>
     </section>
     """
 
 
-def _render_ai_warning(message: str | None) -> str:
+def _render_ai_warning(
+    message: str | None,
+    *,
+    title: str,
+    anchor_id: str | None = None,
+) -> str:
     if not message:
         return ""
+    section_id = f' id="{escape(anchor_id)}"' if anchor_id else ""
     return f"""
-    <section class="ai-warning-card">
-      <h2>AI 归类参考未生成</h2>
+    <section{section_id} class="ai-warning-card anchor-section">
+      <h2>{escape(title)}</h2>
       <p>{escape(message)}</p>
     </section>
     """
 
 
-def _render_tab_bar(trade_date: str) -> str:
-    tabs = [
-        ("summary", "摘要"),
-        ("window-1", trade_date),
-        ("window-3", "近3日"),
-        ("window-5", "近5日"),
-        ("window-10", "近10日"),
-        ("window-20", "近20日"),
-        ("fund-rank", "基金排行"),
-        ("components", "成分股"),
-        ("funds", "基金"),
-    ]
+def _render_tab_bar(
+    trade_date: str,
+    has_weekly_ai: bool,
+    has_daily_ai: bool,
+    has_sector_bridge: bool,
+    has_sector_bridge_ai: bool,
+) -> str:
+    tabs = [("summary", "摘要")]
+    if has_weekly_ai:
+        tabs.append(("weekly-ai", "近一周AI"))
+    if has_daily_ai:
+        tabs.append(("daily-ai", "当日AI"))
+    if has_sector_bridge:
+        tabs.append(("sector-bridge", "板块强度"))
+    if has_sector_bridge_ai:
+        tabs.append(("sector-bridge-ai", "桥接AI"))
+    tabs.extend(
+        [
+            ("window-1", trade_date),
+            ("window-3", "近3日"),
+            ("window-5", "近5日"),
+            ("window-10", "近10日"),
+            ("window-20", "近20日"),
+            ("fund-rank", "基金排行"),
+            ("components", "成分股"),
+            ("funds", "基金"),
+        ]
+    )
     items = "".join(
         f"<a class='tab-link' href='#{anchor}'>{escape(label)}</a>"
         for anchor, label in tabs
@@ -822,8 +851,36 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
     sector_heat = payload["sector_heat"]
     sector_occurrences = payload["sector_occurrences"]
     warnings_html = _render_warning_list(payload["warnings"])
-    ai_summary_html = _render_ai_summary(payload.get("ai_summary"))
-    ai_warning_html = _render_ai_warning(payload.get("ai_summary_warning"))
+    weekly_ai_summary_html = _render_ai_summary(
+        payload.get("weekly_ai_summary"),
+        title="AI 近一周综合分析",
+        anchor_id="weekly-ai",
+    )
+    weekly_ai_warning_html = _render_ai_warning(
+        payload.get("weekly_ai_warning"),
+        title="AI 近一周综合分析未生成",
+        anchor_id="weekly-ai",
+    )
+    ai_summary_html = _render_ai_summary(
+        payload.get("ai_summary"),
+        title="AI 当日归类参考",
+        anchor_id="daily-ai",
+    )
+    ai_warning_html = _render_ai_warning(
+        payload.get("ai_summary_warning"),
+        title="AI 当日归类参考未生成",
+        anchor_id="daily-ai",
+    )
+    sector_bridge_ai_summary_html = _render_ai_summary(
+        payload.get("sector_bridge_ai_summary"),
+        title="AI 基金-板块综合解读",
+        anchor_id="sector-bridge-ai",
+    )
+    sector_bridge_ai_warning_html = _render_ai_warning(
+        payload.get("sector_bridge_ai_warning"),
+        title="AI 基金-板块综合解读未生成",
+        anchor_id="sector-bridge-ai",
+    )
     repeated_focus_html = (
         "".join(
             _render_plain_chip(
@@ -848,7 +905,17 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         if payload["persistent_focus"]
         else "<span class='empty-text'>暂无</span>"
     )
-    tab_bar_html = _render_tab_bar(payload["trade_date"])
+    has_weekly_ai = bool(weekly_ai_summary_html or weekly_ai_warning_html)
+    has_daily_ai = bool(ai_summary_html or ai_warning_html)
+    has_sector_bridge = bool(payload.get("sector_bridge"))
+    has_sector_bridge_ai = bool(sector_bridge_ai_summary_html or sector_bridge_ai_warning_html)
+    tab_bar_html = _render_tab_bar(
+        payload["trade_date"],
+        has_weekly_ai,
+        has_daily_ai,
+        has_sector_bridge,
+        has_sector_bridge_ai,
+    )
     summary_html = f"""
     <section id="summary" class="hero anchor-section">
       <div class="hero-head">
@@ -892,6 +959,7 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         for window_days in (1, 3, 5, 10, 20)
     )
     fund_rank_html = _render_fund_rank_sections(payload)
+    sector_bridge_html = render_sector_bridge_section(payload.get("sector_bridge", {}))
 
     component_note = ""
     if payload["component_unmatched_sectors"]:
@@ -934,6 +1002,7 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         .hero h1 {{ margin:0; font-size:34px; line-height:1.2; }}
         .hero-panel-grid {{ display:grid; grid-template-columns:1.2fr 1fr; gap:10px; margin-top:12px; }}
         .summary-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:12px; }}
+        .ai-top-stack {{ display:grid; gap:12px; margin-top:12px; }}
         .summary-card,.warning-card,.window-card,.section-card {{ background:#fff; color:#1f2937; border-radius:16px; padding:14px; box-shadow:0 10px 24px rgba(15,23,42,.06); }}
         .summary-card h3,.warning-card h2,.window-card h2,.section-card h2 {{ margin:0 0 12px; }}
         .summary-card-dark {{ background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.18); box-shadow:none; }}
@@ -1021,6 +1090,12 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         .holding-chip {{ display:inline-flex; max-width:96px; padding:2px 6px; border-radius:999px; background:#f1f5f9; color:#334155; font-size:12px; line-height:1.5; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
         .note {{ margin:0 0 10px; color:#9a3412; font-size:12px; line-height:1.6; }}
         .component-grid,.fund-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:10px; }}
+        .bridge-two-col {{ display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,0.8fr); gap:12px; align-items:start; margin-top:12px; }}
+        .bridge-column {{ display:grid; gap:10px; min-width:0; }}
+        .bridge-sector-list {{ display:grid; gap:10px; }}
+        .bridge-fund-table-wrap {{ overflow:auto; border:1px solid #e5e7eb; border-radius:14px; background:#fff; }}
+        .bridge-stat {{ font-size:28px; font-weight:800; color:#0f172a; line-height:1.1; }}
+        .bridge-fund-detail {{ display:block; margin-top:4px; color:#64748b; font-size:12px; line-height:1.6; }}
         .component-card,.fund-card {{ border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; background:#fff; }}
         .component-head {{ margin-bottom:8px; font-weight:700; }}
         .fund-meta {{ margin:0; color:#475569; font-size:12px; line-height:1.6; }}
@@ -1028,7 +1103,7 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         .fund-card li {{ line-height:1.6; font-size:13px; }}
         .footer {{ margin:12px 0 0; color:#64748b; font-size:12px; }}
         @media (max-width: 1080px) {{
-          .hero-head,.hero-panel-grid,.summary-grid,.table-grid,.rank-grid {{ grid-template-columns:1fr; }}
+          .hero-head,.hero-panel-grid,.summary-grid,.table-grid,.rank-grid,.bridge-two-col {{ grid-template-columns:1fr; }}
         }}
         @media (max-width: 640px) {{
           .wrap {{ padding:12px; }}
@@ -1039,12 +1114,19 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
     <body>
       <div class="wrap">
         {summary_html}
+        <section class="ai-top-stack">
+          {sector_bridge_ai_summary_html}
+          {sector_bridge_ai_warning_html}
+          {ai_summary_html}
+          {ai_warning_html}
+          {weekly_ai_summary_html}
+          {weekly_ai_warning_html}
+        </section>
         {warnings_html}
-        {ai_summary_html}
-        {ai_warning_html}
         {tab_bar_html}
         {windows_html}
         {fund_rank_html}
+        {sector_bridge_html}
         <section id="components" class="section-card anchor-section">
           <div class="section-head">
             <h2>概念前十成分股</h2>

@@ -1,0 +1,546 @@
+
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>A股板块波段强度评分报告</title>
+      <style>
+        :root {
+          --bg: #f4f1e8;
+          --panel: #fffdf9;
+          --ink: #1f2937;
+          --muted: #6b7280;
+          --line: #e5ded0;
+          --accent: #124559;
+          --accent-soft: #d9ebe8;
+          --danger: #b42318;
+          --warn: #b54708;
+          --s: #7c2d12;
+          --a: #0f766e;
+          --b: #2563eb;
+          --c: #a16207;
+          --d: #7f1d1d;
+          --na: #6b7280;
+        }
+        * { box-sizing: border-box; }
+        body {
+          margin: 0;
+          font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+          color: var(--ink);
+          background:
+            radial-gradient(circle at top left, #fff4d6 0, transparent 32%),
+            radial-gradient(circle at top right, #dbeafe 0, transparent 28%),
+            linear-gradient(180deg, #f8f6ef 0%, var(--bg) 100%);
+        }
+        .container { max-width: 1320px; margin: 0 auto; padding: 32px 20px 56px; }
+        .hero {
+          background: linear-gradient(135deg, rgba(18,69,89,0.96), rgba(27,94,32,0.84));
+          color: white;
+          border-radius: 24px;
+          padding: 28px;
+          box-shadow: 0 20px 60px rgba(18,69,89,0.16);
+          margin-bottom: 24px;
+        }
+        .hero h1 { margin: 0 0 10px; font-size: 34px; }
+        .hero p { margin: 6px 0; opacity: 0.92; }
+        .overview-grid, .legend-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 14px;
+          margin-bottom: 24px;
+        }
+        .metric, .legend-card, .panel, .board-card {
+          background: var(--panel);
+          border: 1px solid var(--line);
+          border-radius: 18px;
+        }
+        .metric {
+          padding: 16px 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .metric-label { font-size: 12px; color: var(--muted); }
+        .metric-value { font-size: 22px; line-height: 1.2; }
+        .legend-card { padding: 16px; }
+        .legend-head {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 8px;
+        }
+        .legend-range { font-weight: 700; margin-bottom: 4px; }
+        .legend-desc { color: var(--muted); font-size: 13px; }
+        .grade-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 30px;
+          height: 30px;
+          padding: 0 8px;
+          border-radius: 999px;
+          color: white;
+          font-weight: 800;
+          font-size: 13px;
+        }
+        .grade-s .grade-badge { background: var(--s); }
+        .grade-a .grade-badge { background: var(--a); }
+        .grade-b .grade-badge { background: var(--b); }
+        .grade-c .grade-badge { background: var(--c); }
+        .grade-d .grade-badge { background: var(--d); }
+        .grade-na .grade-badge { background: var(--na); }
+        .panel { padding: 20px; margin-bottom: 24px; }
+        .panel-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: flex-end;
+          margin-bottom: 16px;
+          flex-wrap: wrap;
+        }
+        .panel-head h2 { margin: 0; font-size: 24px; }
+        .panel-head p { margin: 0; color: var(--muted); }
+        .table-wrap { overflow: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 860px; }
+        th, td {
+          padding: 12px 10px;
+          border-bottom: 1px solid var(--line);
+          text-align: left;
+          white-space: nowrap;
+          font-size: 14px;
+        }
+        thead th {
+          font-size: 12px;
+          letter-spacing: 0.04em;
+          color: var(--muted);
+          text-transform: uppercase;
+        }
+        tbody tr:hover { background: rgba(18,69,89,0.04); }
+        .board-list {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          gap: 18px;
+        }
+        .board-card { padding: 18px; }
+        .board-card-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: flex-start;
+          margin-bottom: 10px;
+        }
+        .board-card-head h3 { margin: 0 0 4px; font-size: 22px; }
+        .board-card-head p { margin: 0; color: var(--muted); font-size: 13px; }
+        .score-box {
+          min-width: 112px;
+          padding: 10px 12px;
+          border-radius: 16px;
+          color: white;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 4px;
+        }
+        .score-box.grade-s { background: linear-gradient(135deg, var(--s), #ea580c); }
+        .score-box.grade-a { background: linear-gradient(135deg, var(--a), #14b8a6); }
+        .score-box.grade-b { background: linear-gradient(135deg, var(--b), #60a5fa); }
+        .score-box.grade-c { background: linear-gradient(135deg, var(--c), #f59e0b); }
+        .score-box.grade-d { background: linear-gradient(135deg, var(--d), #ef4444); }
+        .score-box.grade-na { background: linear-gradient(135deg, var(--na), #9ca3af); }
+        .score-box strong { font-size: 26px; line-height: 1; }
+        .score-box small { opacity: 0.92; }
+        .grade-desc { margin: 0 0 14px; color: var(--muted); }
+        .metric-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+        .metric-grid .metric { padding: 12px 14px; }
+        .metric-grid-compact { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        .note {
+          margin-top: 10px;
+          padding: 12px 14px;
+          border-radius: 14px;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+        .note.warn { background: #fff7ed; color: var(--warn); }
+        .note.danger { background: #fff1f2; color: var(--danger); }
+        .warning-panel { background: #fffaf2; }
+        .warning-list {
+          margin: 0;
+          padding-left: 18px;
+          color: var(--warn);
+          line-height: 1.7;
+        }
+        .breakdown {
+          margin-top: 12px;
+          padding: 12px 14px;
+          background: rgba(18,69,89,0.035);
+          border-radius: 14px;
+          border: 1px solid rgba(18,69,89,0.08);
+        }
+        .breakdown-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 10px;
+          font-size: 13px;
+          color: var(--muted);
+        }
+        .breakdown-table {
+          min-width: 0;
+        }
+        .breakdown-table th,
+        .breakdown-table td {
+          padding: 8px 6px;
+          font-size: 13px;
+        }
+        @media (max-width: 900px) {
+          .hero h1 { font-size: 28px; }
+          .metric-grid, .metric-grid-compact { grid-template-columns: 1fr; }
+          .board-card-head { flex-direction: column; }
+          .score-box { align-items: flex-start; }
+        }
+      </style>
+    </head>
+    <body>
+      <main class="container">
+        <section class="hero">
+          <h1>A股板块波段强度评分报告</h1>
+          <p>生成时间：2026-04-26T14:46:57</p>
+          <p>候选池：2026-04-24 / tonghuashun+industry-live / window=1</p>
+          <p>分析范围：盐湖提锂</p>
+        </section>
+        <section class='overview-grid'><div class='metric'><span class='metric-label'>候选池板块数</span><strong class='metric-value'>10</strong></div><div class='metric'><span class='metric-label'>概念 / 行业</span><strong class='metric-value'>5 / 5</strong></div><div class='metric'><span class='metric-label'>可评分板块数</span><strong class='metric-value'>6</strong></div><div class='metric'><span class='metric-label'>最高分板块</span><strong class='metric-value'>能源金属 / 72.30</strong></div><div class='metric'><span class='metric-label'>买入 / 观察 / 回避</span><strong class='metric-value'>0 / 6 / 4</strong></div></section>
+        <section class='legend-grid'>
+            <div class="legend-card grade-s">
+              <div class="legend-head">
+                <span class="grade-badge">S</span>
+                <strong>极强</strong>
+              </div>
+              <div class="legend-range">&gt;= 85</div>
+              <div class="legend-desc">高景气强趋势</div>
+            </div>
+            
+            <div class="legend-card grade-a">
+              <div class="legend-head">
+                <span class="grade-badge">A</span>
+                <strong>强势</strong>
+              </div>
+              <div class="legend-range">75 - 84.99</div>
+              <div class="legend-desc">趋势占优可跟踪</div>
+            </div>
+            
+            <div class="legend-card grade-b">
+              <div class="legend-head">
+                <span class="grade-badge">B</span>
+                <strong>偏强</strong>
+              </div>
+              <div class="legend-range">60 - 74.99</div>
+              <div class="legend-desc">有结构亮点</div>
+            </div>
+            
+            <div class="legend-card grade-c">
+              <div class="legend-head">
+                <span class="grade-badge">C</span>
+                <strong>震荡</strong>
+              </div>
+              <div class="legend-range">45 - 59.99</div>
+              <div class="legend-desc">观察等待确认</div>
+            </div>
+            
+            <div class="legend-card grade-d">
+              <div class="legend-head">
+                <span class="grade-badge">D</span>
+                <strong>弱势</strong>
+              </div>
+              <div class="legend-range">&lt; 45</div>
+              <div class="legend-desc">风险收益比偏弱</div>
+            </div>
+            
+            <div class="legend-card grade-na">
+              <div class="legend-head">
+                <span class="grade-badge">NA</span>
+                <strong>待定</strong>
+              </div>
+              <div class="legend-range">null</div>
+              <div class="legend-desc">关键指标不足</div>
+            </div>
+            </section>
+        
+        
+    <section class="panel">
+      <div class="panel-head">
+        <h2>板块评分排名</h2>
+        <p>按总分从高到低排序</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>排名</th>
+              <th>板块</th>
+              <th>等级</th>
+              <th>评分</th>
+              <th>建议</th>
+              <th>RS20</th>
+              <th>10日净流入占比</th>
+              <th>评分详情</th>
+              <th>龙头候选</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td>1</td>
+              <td>能源金属</td>
+              <td>B</td>
+              <td>72.30</td>
+              <td>观察</td>
+              <td>18.17</td>
+              <td>0.46%</td>
+              <td>资 0.3689 / RS 1.0000 / 趋 1.0000 / 广 0.7292 / 量 1.0000 / 龙 0.7139 / 罚 0.0000</td>
+              <td>盛新锂能</td>
+            </tr>
+            
+            <tr>
+              <td>2</td>
+              <td>电子化学品</td>
+              <td>C</td>
+              <td>57.68</td>
+              <td>观察</td>
+              <td>19.35</td>
+              <td>-0.29%</td>
+              <td>资 0.0089 / RS 1.0000 / 趋 1.0000 / 广 0.2925 / 量 1.0000 / 龙 0.8072 / 罚 0.0000</td>
+              <td>华特气体</td>
+            </tr>
+            
+            <tr>
+              <td>3</td>
+              <td>氟化工概念</td>
+              <td>C</td>
+              <td>51.77</td>
+              <td>回避</td>
+              <td>3.33</td>
+              <td>0.13%</td>
+              <td>资 0.3540 / RS 0.3069 / 趋 0.7500 / 广 0.4387 / 量 1.0000 / 龙 0.8949 / 罚 0.0000</td>
+              <td>多氟多</td>
+            </tr>
+            
+            <tr>
+              <td>4</td>
+              <td>工业金属</td>
+              <td>C</td>
+              <td>50.14</td>
+              <td>回避</td>
+              <td>6.89</td>
+              <td>-1.03%</td>
+              <td>资 0.3672 / RS 0.3399 / 趋 0.7500 / 广 0.3088 / 量 0.9101 / 龙 0.9184 / 罚 0.0000</td>
+              <td>西藏珠峰</td>
+            </tr>
+            
+            <tr>
+              <td>5</td>
+              <td>化肥</td>
+              <td>D</td>
+              <td>44.25</td>
+              <td>回避</td>
+              <td>-2.58</td>
+              <td>-0.30%</td>
+              <td>资 0.3149 / RS 0.0000 / 趋 0.7500 / 广 0.5738 / 量 1.0000 / 龙 0.6524 / 罚 0.0000</td>
+              <td>天齐锂业</td>
+            </tr>
+            
+            <tr>
+              <td>6</td>
+              <td>农化制品</td>
+              <td>D</td>
+              <td>34.70</td>
+              <td>回避</td>
+              <td>-2.69</td>
+              <td>-0.40%</td>
+              <td>资 0.2757 / RS 0.0000 / 趋 0.4000 / 广 0.4305 / 量 1.0000 / 龙 0.5348 / 罚 0.0000</td>
+              <td>宏达股份</td>
+            </tr>
+            
+            <tr>
+              <td>7</td>
+              <td>盐湖提锂</td>
+              <td>NA</td>
+              <td>null</td>
+              <td>观察</td>
+              <td>3.53</td>
+              <td>0.20%</td>
+              <td>资 0.3363 / RS 0.2063 / 趋 1.0000 / 广 null / 量 1.0000 / 龙 null / 罚 0.0000</td>
+              <td>-</td>
+            </tr>
+            
+            <tr>
+              <td>8</td>
+              <td>PVDF概念</td>
+              <td>NA</td>
+              <td>null</td>
+              <td>观察</td>
+              <td>null</td>
+              <td>null</td>
+              <td>资 null / RS null / 趋 null / 广 null / 量 null / 龙 null / 罚 0.0000</td>
+              <td>-</td>
+            </tr>
+            
+            <tr>
+              <td>9</td>
+              <td>电池</td>
+              <td>NA</td>
+              <td>null</td>
+              <td>观察</td>
+              <td>4.81</td>
+              <td>0.65%</td>
+              <td>资 0.3870 / RS 0.2539 / 趋 1.0000 / 广 null / 量 1.0000 / 龙 null / 罚 0.0000</td>
+              <td>-</td>
+            </tr>
+            
+            <tr>
+              <td>10</td>
+              <td>磷化工</td>
+              <td>NA</td>
+              <td>null</td>
+              <td>观察</td>
+              <td>1.85</td>
+              <td>-0.23%</td>
+              <td>资 0.3461 / RS 0.1974 / 趋 0.7500 / 广 null / 量 1.0000 / 龙 null / 罚 0.0000</td>
+              <td>-</td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+    </section>
+    
+        
+    <section class="panel">
+      <div class="panel-head">
+        <h2>板块指标明细</h2>
+        <p>重点板块优先展示；无输入时展示前 10 名</p>
+      </div>
+      <div class="board-list">
+        
+            <article class="board-card">
+              <div class="board-card-head">
+                <div>
+                  <h3>盐湖提锂</h3>
+                  <p>- / concept</p>
+                </div>
+                <div class="score-box grade-na">
+                  <span class="grade-badge">NA</span>
+                  <strong>null</strong>
+                  <small>待定 / 观察</small>
+                </div>
+              </div>
+              <p class="grade-desc">关键指标不足，暂不评级</p>
+              <div class="metric-grid">
+                <div class='metric'><span class='metric-label'>5日涨幅</span><strong class='metric-value'>0.72%</strong></div>
+                <div class='metric'><span class='metric-label'>20日涨幅</span><strong class='metric-value'>10.05%</strong></div>
+                <div class='metric'><span class='metric-label'>RS_5日</span><strong class='metric-value'>-0.14</strong></div>
+                <div class='metric'><span class='metric-label'>RS_20日</span><strong class='metric-value'>3.53</strong></div>
+                <div class='metric'><span class='metric-label'>量比20日</span><strong class='metric-value'>1.20</strong></div>
+                <div class='metric'><span class='metric-label'>5日净流入占比</span><strong class='metric-value'>-1.39%</strong></div>
+                <div class='metric'><span class='metric-label'>10日净流入占比</span><strong class='metric-value'>0.20%</strong></div>
+                <div class='metric'><span class='metric-label'>上涨家数占比</span><strong class='metric-value'>null</strong></div>
+                <div class='metric'><span class='metric-label'>&gt;3%占比</span><strong class='metric-value'>null</strong></div>
+                <div class='metric'><span class='metric-label'>&gt;5%占比</span><strong class='metric-value'>null</strong></div>
+                <div class='metric'><span class='metric-label'>涨停密度</span><strong class='metric-value'>null</strong></div>
+                <div class='metric'><span class='metric-label'>龙头候选</span><strong class='metric-value'>-</strong></div>
+              </div>
+              <div class="metric-grid metric-grid-compact">
+                <div class='metric'><span class='metric-label'>MA5</span><strong class='metric-value'>2194.31</strong></div>
+                <div class='metric'><span class='metric-label'>MA10</span><strong class='metric-value'>2180.70</strong></div>
+                <div class='metric'><span class='metric-label'>MA20</span><strong class='metric-value'>2117.91</strong></div>
+                <div class='metric'><span class='metric-label'>MA60</span><strong class='metric-value'>2082.08</strong></div>
+                <div class='metric'><span class='metric-label'>风险惩罚</span><strong class='metric-value'>0.00</strong></div>
+                <div class='metric'><span class='metric-label'>龙头索引</span><strong class='metric-value'>null</strong></div>
+              </div>
+              <div class="breakdown">
+                <div class="breakdown-head">
+                  <strong>打分拆解</strong>
+                  <span>基准分 null / 最终分 null</span>
+                </div>
+                <div class="table-wrap">
+                  <table class="breakdown-table">
+                    <thead>
+                      <tr>
+                        <th>维度</th>
+                        <th>子分(0~1)</th>
+                        <th>权重</th>
+                        <th>贡献分</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      
+                <tr>
+                  <td>资金持续性</td>
+                  <td>0.3363</td>
+                  <td>25%</td>
+                  <td>8.41</td>
+                </tr>
+                
+                <tr>
+                  <td>相对强度RS</td>
+                  <td>0.2063</td>
+                  <td>20%</td>
+                  <td>4.13</td>
+                </tr>
+                
+                <tr>
+                  <td>趋势结构</td>
+                  <td>1.0000</td>
+                  <td>15%</td>
+                  <td>15.00</td>
+                </tr>
+                
+                <tr>
+                  <td>板块广度</td>
+                  <td>null</td>
+                  <td>15%</td>
+                  <td>null</td>
+                </tr>
+                
+                <tr>
+                  <td>成交活跃度</td>
+                  <td>1.0000</td>
+                  <td>10%</td>
+                  <td>10.00</td>
+                </tr>
+                
+                <tr>
+                  <td>龙头质量</td>
+                  <td>null</td>
+                  <td>10%</td>
+                  <td>null</td>
+                </tr>
+                
+            <tr>
+              <td>风险惩罚</td>
+              <td>0.0000</td>
+              <td>-</td>
+              <td>0.00 </td>
+            </tr>
+            
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              <div class='note warn'><strong>数据告警：</strong>盐湖提锂: 缺少成分股数据；盐湖提锂: 缺少日级主力净流入历史</div>
+            </article>
+            
+      </div>
+    </section>
+    
+      </main>
+    </body>
+    </html>
+    

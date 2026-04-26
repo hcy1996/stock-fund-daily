@@ -558,6 +558,7 @@ def build_report_payload(
         "consensus_hot": signal_summary["consensus_hot"],
         "divergence_hot": signal_summary["divergence_hot"],
         "conclusions": signal_summary["conclusions"],
+        "focus_names": focus_names,
         "related_funds": related_funds,
         "focus_records": focus_records,
         "top_components": {

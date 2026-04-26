@@ -155,8 +155,8 @@ def _extract_text(payload: dict) -> str:
     return "\n".join(parts).strip()
 
 
-def build_ai_prompt(payload: dict) -> str:
-    prompt_payload = {
+def build_ai_prompt_payload(payload: dict) -> dict:
+    return {
         "交易日": payload["trade_date"],
         "板块多周期榜单": _serialize_board_rankings(payload),
         "板块信号摘要": _serialize_board_signals(payload),
@@ -165,6 +165,10 @@ def build_ai_prompt(payload: dict) -> str:
         "可跟踪ETF候选": _serialize_related_etfs(payload),
         "热点板块成分股样本": _serialize_components(payload),
     }
+
+
+def build_ai_prompt(payload: dict) -> str:
+    prompt_payload = build_ai_prompt_payload(payload)
     return (
         "你是一名A股投资策略分析师。基于板块排行榜（同花顺+东方财富，多周期）和基金数据，"
         "输出可执行市场判断与投资建议。目标：识别主线板块、轮动路径、资金风格、风险信号，并给具体操作建议。"
@@ -186,13 +190,12 @@ def _truncate_error_text(value: str, limit: int = 180) -> str:
     return compact[: limit - 3] + "..."
 
 
-def build_ai_summary_result(ai_config: AIConfig, payload: dict) -> tuple[str | None, str | None]:
+def request_ai_text(ai_config: AIConfig, prompt: str) -> tuple[str | None, str | None]:
     if not ai_config.enabled:
         return None, None
     if not ai_config.base_url or not ai_config.api_key or not ai_config.model:
         return None, "AI 已启用，但缺少 `base_url` / `api_key` / `model` 配置。"
 
-    prompt = build_ai_prompt(payload)
     body = json.dumps(
         {
             "model": ai_config.model,
@@ -257,6 +260,62 @@ def build_ai_summary_result(ai_config: AIConfig, payload: dict) -> tuple[str | N
     if errors:
         return None, "AI 请求失败：" + "；".join(errors[:2])
     return None, "AI 请求失败：未返回可用结果。"
+
+
+def build_ai_summary_result(ai_config: AIConfig, payload: dict) -> tuple[str | None, str | None]:
+    return request_ai_text(ai_config, build_ai_prompt(payload))
+
+
+def _trim_weekly_rankings(rankings: dict[str, dict[str, list[str]]]) -> dict[str, dict[str, list[str]]]:
+    return {
+        source_label: {
+            window_label: names[:5]
+            for window_label, names in windows.items()
+        }
+        for source_label, windows in rankings.items()
+    }
+
+
+def _compact_history_snapshot(snapshot: dict) -> dict:
+    daily_ai_input = snapshot.get("daily_ai_input", {})
+    return {
+        "交易日": snapshot.get("trade_date", ""),
+        "板块多周期榜单": _trim_weekly_rankings(daily_ai_input.get("板块多周期榜单", {})),
+        "板块信号摘要": daily_ai_input.get("板块信号摘要", {}),
+        "基金重仓股聚集": daily_ai_input.get("基金重仓股聚集", [])[:8],
+        "可跟踪ETF候选": daily_ai_input.get("可跟踪ETF候选", {}),
+        "AI日分析": snapshot.get("daily_ai_summary") or "",
+        "AI日分析告警": snapshot.get("daily_ai_warning") or "",
+    }
+
+
+def build_weekly_ai_prompt(history_snapshots: list[dict]) -> str:
+    compact_history = [_compact_history_snapshot(snapshot) for snapshot in history_snapshots]
+    return (
+        "你是一名A股复盘与节奏分析师。下面给你最近一周内若干个交易日的历史快照，"
+        "每个快照都包含当日多周期板块榜单、板块信号摘要，以及当日 AI 分析结果。"
+        "请基于这些连续样本做跨天综合分析，不要逐日流水账。"
+        "目标：识别近一周主线如何演化、哪些方向在强化或钝化、资金风格是否切换、"
+        "当前最值得跟踪的主线与轮动机会，以及需要回避的风险方向。"
+        "要求：1.先判断样本是否足够，若不足 5 个交易日，要先说明局限；"
+        "2.主线板块给 2-3 个，次主线给 1-2 个，必须说明是延续、扩散、分歧修复还是退潮；"
+        "3.说明轮动路径：哪些方向在接力，哪些方向只是脉冲；"
+        "4.结合基金重仓股聚集和 ETF 候选，判断更偏成长、主题、价值还是防御；"
+        "5.风险提示必须点名：高位反复、平台分歧、持续性不足或短期拥挤；"
+        "6.操作建议要具体到继续跟踪、低吸等待、只观察、不追涨等。"
+        "输出结构：1近一周主线演化；2当前最强主线与次主线；3轮动路径与资金风格；4风险提示；5后续观察与操作建议。"
+        "原则：只讲跨天结论，不重复原始涨跌描述；持续性优先于单日强弱；结论必须明确。"
+        f"数据：{json.dumps(compact_history, ensure_ascii=False, separators=(',', ':'))}"
+    )
+
+
+def build_weekly_ai_summary_result(
+    ai_config: AIConfig,
+    history_snapshots: list[dict],
+) -> tuple[str | None, str | None]:
+    if not history_snapshots:
+        return None, "近一周综合分析未生成：缺少历史快照。"
+    return request_ai_text(ai_config, build_weekly_ai_prompt(history_snapshots))
 
 
 def build_ai_summary(ai_config: AIConfig, payload: dict) -> str | None:

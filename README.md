@@ -8,6 +8,7 @@
 - 同花顺 `1/3/5/10/20` 日公开页面
 - 邮件正文直接展示双榜单和差异摘要
 - 天天基金开放式基金当日、近一周、近一月排行榜
+- 日报正文集成板块强度解释层与基金-板块 AI 综合解读
 - 若某一数据源抓取失败，邮件仍会发送，并在顶部显式告警
 
 ## 目录
@@ -18,6 +19,7 @@
 - `app/`: 解析、落库、分析、渲染、发送邮件
 - `data/`: SQLite、原始抓取数据、基金映射
 - `output/`: 生成的 HTML 日报
+- `reports/history/`: 按交易日保存的 AI prompt / AI 分析 / 周综合分析快照
 - `ops/com.codex.stock-daily-report.plist.example`: macOS `launchd` 模板
 
 ## 快速开始
@@ -29,6 +31,12 @@ cp config.example.json config.json
 ```
 
 2. 填写 `config.json` 里的 SMTP 和收件人。
+
+2.5 安装依赖（新板块评分功能依赖 `akshare` 与 `pandas`）：
+
+```bash
+python3 -m pip install akshare pandas
+```
 
 3. 手动抓数：
 
@@ -56,11 +64,19 @@ python3 -m app.cli run-once
 
 ## AI 归类参考
 
-支持可选接入 OpenAI 兼容接口，为统计模块补一段 AI 归类参考：
+支持可选接入 OpenAI 兼容接口，为统计模块补两段 AI 内容：
 
 - 默认关闭
-- 开启后会在报告顶部增加 `AI 归类参考`
+- 开启后会在报告顶部增加 `AI 当日归类参考`
+- 若板块强度整合成功，还会增加 `AI 基金-板块综合解读`
+- 同时会基于最近 `7` 个交易日的历史快照生成 `AI 近一周综合分析`
 - 只输出观察和风险提示，不应作为投资决策依据
+
+启用后，程序会额外保留以下历史：
+
+- `data/archive/raw/<YYYY-MM-DD>/`：当天抓取的原始文件快照，仅本地保留
+- `output/<YYYY-MM-DD>-*.txt|json`：当天 AI prompt、AI 结果与分析快照
+- `reports/history/<YYYY-MM-DD>/`：会进入仓库的轻量历史快照，供后续近一周综合分析复用
 
 配置方式：
 
@@ -112,6 +128,7 @@ python3 -m app.cli run-once
 - GitHub runner 默认不保留本地 SQLite 和原始抓取数据，因此邮件发送日志不会自动跨天保留
 - 每次执行完成后会上传当次生成的 HTML 报告 artifact，便于回看
 - workflow 还会把当次报告提交到仓库 `reports/` 目录，并同步更新 `reports/latest.html`
+- workflow 提交 `reports/` 时，也会一并保存 `reports/history/` 下的 AI 历史快照
 - workflow 还会自动发布 GitHub Pages，默认首页为最新一期报告
 
 如果需要通过网页直接访问 HTML 报告，还需要在仓库设置里确认：
@@ -130,7 +147,84 @@ python3 -m app.cli report
 python3 -m app.cli run-once --dry-run
 python3 -m app.cli run-once
 python3 -m app.cli schedule
+python3 -m app.cli sector-strength --board 盐湖提锂
+python3 -m app.cli sector-strength --board 盐湖提锂 --board 化肥
 ```
+
+## A股板块波段强度评分
+
+新增一个独立 CLI 功能，不影响现有日报链路。
+
+功能入口：
+
+```bash
+python3 -m app.cli sector-strength --board 盐湖提锂
+```
+
+也可以同时分析多个输入板块：
+
+```bash
+python3 -m app.cli sector-strength --board 盐湖提锂 --board 化肥
+```
+
+如果不传 `--board`，程序会直接分析候选池前 `50` 个板块：
+
+```bash
+python3 -m app.cli sector-strength
+```
+
+候选池规则：
+
+- 默认同时纳入 `概念板块 + 行业板块`
+- 概念板块优先使用 SQLite 中最近一次抓取到的前 `N` 个板块
+- 优先级：`1日榜 tonghuashun` -> `1日榜 eastmoney` -> `5日榜 tonghuashun` -> `5日榜 eastmoney`
+- 行业板块默认实时抓取前 `N` 个候选
+- `--candidate-limit` 表示“每类候选池数量”，所以默认总分析范围通常会大于 `50`
+- 若本地没有候选池，则实时抓取概念资金流榜单兜底
+
+数据源优先级：
+
+- `AkShare`
+- 东方财富公开接口
+- 本地 SQLite 快照仅作为资金流候选池和缺失兜底，不会编造字段
+
+输出内容：
+
+- 板块评分排名表
+- 每个板块的指标明细
+- 六个子分、权重、风险惩罚、等级依据
+- 龙头股候选
+- 风险提示
+- 操作建议：`买入 / 观察 / 回避`
+- 可复用 JSON 结构
+
+输出文件：
+
+- `output/sector-strength/<trade_date>/result.json`
+- `output/sector-strength/<trade_date>/summary.txt`
+- `output/sector-strength/<trade_date>/report.html`
+
+得分等级：
+
+- `S`：`>= 85`，极强，高景气强趋势
+- `A`：`75 - 84.99`，强势，趋势占优可跟踪
+- `B`：`60 - 74.99`，偏强，有结构亮点
+- `C`：`45 - 59.99`，震荡，观察等待确认
+- `D`：`< 45`，弱势，风险收益比偏弱
+- `NA`：关键指标不足，暂不评级
+
+JSON 里会保留：
+
+- 原始抓数快照标准化结果
+- 5日/20日涨幅、RS、均线、广度、活跃度、资金流占比等指标
+- 六个子分、风险惩罚、总分、等级、建议
+- `warnings` 和 `missing_metrics`
+
+说明：
+
+- 缺失数据统一写成 `null`
+- 如果输入板块不在候选池里，程序会尝试按公开板块列表解析后追加分析，并标注该板块不属于候选池
+- 候选池当前主要来自概念板块榜单；行业板块支持解析和分析，但默认不主动纳入候选池
 
 ## 数据源
 

@@ -7,11 +7,22 @@ import sys
 from zoneinfo import ZoneInfo
 
 from app.analyzer import build_report_payload
-from app.ai_summary import build_ai_summary_result
+from app.ai_summary import (
+    build_ai_prompt,
+    build_ai_prompt_payload,
+    build_weekly_ai_prompt,
+    request_ai_text,
+)
 from app.config import PROJECT_ROOT, load_config
 from app.emailer import send_html_email
 from app.fetch_status import fetch_succeeded, load_fetch_status
 from app.fund_matcher import load_fund_catalog, match_funds
+from app.report_history import (
+    archive_raw_snapshot,
+    build_analysis_snapshot,
+    load_recent_analysis_snapshots,
+    save_analysis_artifacts,
+)
 from app.raw_enricher import (
     eastmoney_window_rollup_path,
     enrich_raw_data,
@@ -19,6 +30,9 @@ from app.raw_enricher import (
     load_eastmoney_window_rollup,
 )
 from app.report_renderer import render_html, save_report
+from app.sector_bridge import build_sector_bridge_payload
+from app.sector_bridge_ai import request_sector_bridge_ai_summary
+from app.sector_strength import get_sector_strength_analysis_json, run_sector_strength_analysis
 from app.sources.fund_holdings import (
     collect_rank_funds,
     fetch_rank_fund_holdings,
@@ -36,6 +50,7 @@ from app.sources.tonghuashun import parse_20d_file, parse_board_file
 from app.storage import (
     connect,
     init_db,
+    latest_trade_date,
     log_email_send,
     upsert_fund_holdings,
     upsert_fund_ranks,
@@ -105,6 +120,9 @@ def ingest_raw(config) -> int:
             parse_holdings_file(holdings_raw_path(config.storage.raw_dir, fund.fund_code), fund.fund_code),
         )
 
+    trade_date = latest_trade_date(conn)
+    if trade_date:
+        archive_raw_snapshot(config.storage.raw_dir, trade_date)
     conn.close()
     return total
 
@@ -121,11 +139,83 @@ def generate_report(config) -> tuple[Path, str, str]:
         match_funds_fn=match_funds,
         raw_dir=config.storage.raw_dir,
     )
-    ai_summary, ai_warning = build_ai_summary_result(config.ai, payload)
+    bridge_ai_prompt = None
+    bridge_ai_summary = None
+    bridge_ai_warning = None
+    try:
+        _trade_date, sector_strength_payload, _sector_strength_summary = get_sector_strength_analysis_json(
+            config,
+            board_queries=payload.get("focus_names", []),
+            candidate_limit=config.report.top_n,
+        )
+        payload["sector_strength"] = sector_strength_payload
+        payload["sector_bridge"] = build_sector_bridge_payload(payload, sector_strength_payload)
+        if payload["sector_bridge"].get("available"):
+            bridge_ai_summary, bridge_ai_warning, bridge_ai_prompt = request_sector_bridge_ai_summary(
+                config.ai,
+                payload,
+                payload["sector_bridge"],
+            )
+    except Exception as exc:
+        payload["sector_strength"] = None
+        payload["sector_bridge"] = {
+            "available": False,
+            "warnings": [f"板块强度整合失败: {exc}"],
+            "summary_cards": [],
+            "focus_sector_cards": [],
+            "top_ranked_sectors": [],
+            "fund_to_sector_links": [],
+        }
+    payload["sector_bridge_ai_summary"] = bridge_ai_summary
+    payload["sector_bridge_ai_warning"] = bridge_ai_warning
+
+    daily_ai_prompt = build_ai_prompt(payload)
+    ai_summary, ai_warning = request_ai_text(config.ai, daily_ai_prompt)
     payload["ai_summary"] = ai_summary
     payload["ai_summary_warning"] = ai_warning
     if ai_warning:
         print(f"AI warning: {ai_warning}")
+
+    recent_snapshots = load_recent_analysis_snapshots(
+        limit_days=6,
+        exclude_trade_dates={payload["trade_date"]},
+    )
+    snapshot = build_analysis_snapshot(
+        trade_date=payload["trade_date"],
+        daily_ai_input=build_ai_prompt_payload(payload),
+        daily_ai_summary=ai_summary,
+        daily_ai_warning=ai_warning,
+        weekly_ai_summary=None,
+        weekly_ai_warning=None,
+        bridge_ai_prompt=bridge_ai_prompt,
+        bridge_ai_summary=bridge_ai_summary,
+        bridge_ai_warning=bridge_ai_warning,
+    )
+    weekly_history = recent_snapshots + [snapshot]
+    weekly_ai_prompt = build_weekly_ai_prompt(weekly_history)
+    weekly_ai_summary, weekly_ai_warning = request_ai_text(config.ai, weekly_ai_prompt)
+    payload["weekly_ai_summary"] = weekly_ai_summary
+    payload["weekly_ai_warning"] = weekly_ai_warning
+    if weekly_ai_warning:
+        print(f"Weekly AI warning: {weekly_ai_warning}")
+
+    snapshot["weekly_ai_summary"] = weekly_ai_summary
+    snapshot["weekly_ai_warning"] = weekly_ai_warning
+    save_analysis_artifacts(
+        output_dir=config.storage.output_dir,
+        trade_date=payload["trade_date"],
+        snapshot=snapshot,
+        daily_ai_prompt=daily_ai_prompt,
+        daily_ai_summary=ai_summary,
+        daily_ai_warning=ai_warning,
+        weekly_ai_prompt=weekly_ai_prompt,
+        weekly_ai_summary=weekly_ai_summary,
+        weekly_ai_warning=weekly_ai_warning,
+        bridge_ai_prompt=bridge_ai_prompt,
+        bridge_ai_summary=bridge_ai_summary,
+        bridge_ai_warning=bridge_ai_warning,
+    )
+
     html = render_html(payload, config.meta.report_name, raw_dir=config.storage.raw_dir)
     report_path = save_report(config.storage.output_dir, payload["trade_date"], html)
     subject = f"{config.meta.report_name} | {payload['trade_date']}"
@@ -212,6 +302,24 @@ def cmd_schedule(args) -> int:
     return 0
 
 
+def cmd_sector_strength(args) -> int:
+    config = load_config(args.config)
+    try:
+        json_path, summary_path, html_path, summary_text = run_sector_strength_analysis(
+            config,
+            board_queries=args.board,
+            candidate_limit=args.candidate_limit,
+        )
+    except Exception as exc:
+        print(f"sector-strength failed: {exc}")
+        return 1
+    print(summary_text)
+    print(f"JSON: {json_path}")
+    print(f"SUMMARY: {summary_path}")
+    print(f"HTML: {html_path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="股票基金日报工具")
     parser.add_argument("--config", help="配置文件路径，默认读取 config.json")
@@ -237,6 +345,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     schedule_parser = subparsers.add_parser("schedule", help="常驻调度进程")
     schedule_parser.set_defaults(func=cmd_schedule)
+
+    sector_strength_parser = subparsers.add_parser("sector-strength", help="A股板块波段强度评分")
+    sector_strength_parser.add_argument(
+        "--board",
+        action="append",
+        help="板块名称或 BK 代码，可重复传入；不传则分析候选池全部板块",
+    )
+    sector_strength_parser.add_argument(
+        "--candidate-limit",
+        type=int,
+        default=50,
+        help="每类候选池板块数量，默认 50；默认会合并概念和行业两类候选池",
+    )
+    sector_strength_parser.set_defaults(func=cmd_sector_strength)
     return parser
 
 
