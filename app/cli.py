@@ -33,7 +33,6 @@ from app.raw_enricher import (
 from app.report_renderer import render_html, save_report
 from app.sector_bridge import build_sector_bridge_payload
 from app.sector_bridge_ai import request_sector_bridge_ai_summary
-from app.sector_strength import get_sector_strength_analysis_json, run_sector_strength_analysis
 from app.sources.fund_holdings import (
     collect_rank_funds,
     fetch_rank_fund_holdings,
@@ -129,6 +128,8 @@ def ingest_raw(config) -> int:
 
 
 def generate_report(config) -> tuple[Path, str, str]:
+    from app.sector_strength import get_sector_strength_analysis_json
+
     conn = connect(config.storage.db_path)
     init_db(conn)
     payload = build_report_payload(
@@ -327,6 +328,8 @@ def cmd_schedule(args) -> int:
 
 
 def cmd_sector_strength(args) -> int:
+    from app.sector_strength import run_sector_strength_analysis
+
     config = load_config(args.config)
     try:
         json_path, summary_path, html_path, summary_text = run_sector_strength_analysis(

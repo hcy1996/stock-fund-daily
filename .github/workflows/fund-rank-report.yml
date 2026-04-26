@@ -31,10 +31,60 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Debug workflow context
+        shell: bash
+        run: |
+          echo "::group::workflow-context"
+          echo "event_name=${{ github.event_name }}"
+          echo "ref=${{ github.ref }}"
+          echo "ref_name=${{ github.ref_name }}"
+          echo "sha=${{ github.sha }}"
+          echo "actor=${{ github.actor }}"
+          echo "run_id=${{ github.run_id }}"
+          echo "run_number=${{ github.run_number }}"
+          echo "dry_run=${{ inputs.dry_run }}"
+          echo "workspace=$(pwd)"
+          date '+runner_time=%F %T %Z'
+          echo "::endgroup::"
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pandas akshare
+
+      - name: Debug Python runtime
+        shell: bash
+        run: |
+          echo "::group::python-runtime"
+          python3 --version
+          which python3
+          python3 -m pip --version || true
+          echo "::endgroup::"
+
+      - name: Debug Python modules
+        shell: bash
+        run: |
+          echo "::group::python-modules"
+          python3 - <<'PY'
+          import importlib.util
+          import json
+
+          modules = ["pandas", "akshare"]
+          print(
+              json.dumps(
+                  {name: bool(importlib.util.find_spec(name)) for name in modules},
+                  ensure_ascii=False,
+                  indent=2,
+              )
+          )
+          PY
+          echo "::endgroup::"
 
       - name: Build runtime config
         env:
@@ -144,6 +194,80 @@ jobs:
           )
           PY
 
+      - name: Debug runtime config summary
+        env:
+          SMTP_HOST: ${{ secrets.STOCK_REPORT_SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.STOCK_REPORT_SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.STOCK_REPORT_SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.STOCK_REPORT_SMTP_PASSWORD }}
+          SMTP_SENDER: ${{ secrets.STOCK_REPORT_SMTP_SENDER }}
+          REPORT_RECIPIENTS_JSON: ${{ secrets.STOCK_REPORT_RECIPIENTS_JSON }}
+          AI_ENABLED: ${{ secrets.STOCK_REPORT_AI_ENABLED }}
+          AI_PROVIDER: ${{ secrets.STOCK_REPORT_AI_PROVIDER }}
+          AI_BASE_URL: ${{ secrets.STOCK_REPORT_AI_BASE_URL }}
+          AI_API_KEY: ${{ secrets.STOCK_REPORT_AI_API_KEY }}
+          AI_MODEL: ${{ secrets.STOCK_REPORT_AI_MODEL }}
+          SMTP_USE_SSL: ${{ vars.STOCK_REPORT_SMTP_USE_SSL }}
+          SMTP_STARTTLS: ${{ vars.STOCK_REPORT_SMTP_STARTTLS }}
+          REPORT_NAME: ${{ vars.STOCK_REPORT_NAME }}
+          ENABLE_TONGHUASHUN_20D: ${{ vars.STOCK_REPORT_ENABLE_TONGHUASHUN_20D }}
+          USER_AGENT: ${{ vars.STOCK_REPORT_USER_AGENT }}
+        shell: bash
+        run: |
+          echo "::group::config-summary"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          recipients = json.loads(os.environ["REPORT_RECIPIENTS_JSON"])
+          config = json.loads(Path("config.json").read_text(encoding="utf-8"))
+
+          def exists(key: str) -> bool:
+              return bool(os.environ.get(key, "").strip())
+
+          print(
+              json.dumps(
+                  {
+                      "required_secret_presence": {
+                          "SMTP_HOST": exists("SMTP_HOST"),
+                          "SMTP_PORT": exists("SMTP_PORT"),
+                          "SMTP_USERNAME": exists("SMTP_USERNAME"),
+                          "SMTP_PASSWORD": exists("SMTP_PASSWORD"),
+                          "SMTP_SENDER": exists("SMTP_SENDER"),
+                          "REPORT_RECIPIENTS_JSON": exists("REPORT_RECIPIENTS_JSON"),
+                      },
+                      "optional_secret_presence": {
+                          "AI_ENABLED": exists("AI_ENABLED"),
+                          "AI_PROVIDER": exists("AI_PROVIDER"),
+                          "AI_BASE_URL": exists("AI_BASE_URL"),
+                          "AI_API_KEY": exists("AI_API_KEY"),
+                          "AI_MODEL": exists("AI_MODEL"),
+                      },
+                      "recipient_count": len(recipients),
+                      "report_name": config["meta"]["report_name"],
+                      "schedule": config["schedule"],
+                      "storage": config["storage"],
+                      "report": config["report"],
+                      "sources": {
+                          "enable_tonghuashun_20d": config["sources"]["enable_tonghuashun_20d"],
+                          "user_agent_length": len(config["sources"]["user_agent"]),
+                      },
+                      "ai": {
+                          "enabled": config["ai"]["enabled"],
+                          "provider": config["ai"]["provider"],
+                          "base_url_present": bool(config["ai"]["base_url"]),
+                          "api_key_present": bool(config["ai"]["api_key"]),
+                          "model": config["ai"]["model"],
+                      },
+                  },
+                  ensure_ascii=False,
+                  indent=2,
+              )
+          )
+          PY
+          echo "::endgroup::"
+
       - name: Preflight fund rank snapshot
         id: preflight
         shell: bash
@@ -163,10 +287,16 @@ jobs:
           TODAY="$(date +%F)"
           echo "report_date=$REPORT_DATE" >> "$GITHUB_OUTPUT"
           echo "today=$TODAY" >> "$GITHUB_OUTPUT"
+          echo "preflight_report_date=$REPORT_DATE"
+          echo "preflight_today=$TODAY"
           if [ "${{ github.event_name }}" = "schedule" ] && [ "$REPORT_DATE" != "$TODAY" ]; then
             echo "Scheduled fund-rank run skipped: report date $REPORT_DATE does not match current date $TODAY."
             exit 0
           fi
+
+          echo "::group::fund-rank-preflight"
+          find data/raw -maxdepth 3 -type f | sort || true
+          echo "::endgroup::"
 
       - name: Generate fund rank report and optionally send email
         id: generate
@@ -185,6 +315,12 @@ jobs:
             exit 1
           fi
           echo "report_path=$REPORT_PATH" >> "$GITHUB_OUTPUT"
+          echo "::group::generated-fund-rank-report"
+          echo "report_path=$REPORT_PATH"
+          ls -lh "$REPORT_PATH"
+          REPORT_DIR="$(dirname "$REPORT_PATH")"
+          find "$REPORT_DIR" -maxdepth 2 -type f | sort
+          echo "::endgroup::"
 
       - name: Upload generated fund rank report
         if: ${{ steps.generate.outputs.report_path != '' }}
@@ -206,6 +342,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add reports
+          echo "::group::git-staged-report-files"
+          git status --short
+          git diff --cached --stat
+          find reports -maxdepth 2 -type f | sort
+          echo "::endgroup::"
           if git diff --cached --quiet; then
             echo "No fund-rank report changes to commit."
             exit 0
@@ -233,6 +374,9 @@ jobs:
             fi
           fi
           touch site/.nojekyll
+          echo "::group::pages-site-files"
+          find site -maxdepth 3 -type f | sort
+          echo "::endgroup::"
 
       - name: Configure GitHub Pages
         if: ${{ steps.generate.outputs.report_path != '' }}
@@ -255,6 +399,14 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Debug deploy context
+        shell: bash
+        run: |
+          echo "::group::deploy-context"
+          echo "report_date=${{ needs.fund-rank-report.outputs.report_date }}"
+          echo "report_path=${{ needs.fund-rank-report.outputs.report_path }}"
+          echo "::endgroup::"
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
