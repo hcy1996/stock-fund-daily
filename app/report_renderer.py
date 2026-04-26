@@ -5,7 +5,15 @@ import json
 from pathlib import Path
 import re
 
-from app.models import MatchedFund, SectorComponentRecord, SectorFlowRecord, WindowSection
+from app.models import (
+    FundHoldingRecord,
+    FundRankRecord,
+    FundRankSection,
+    MatchedFund,
+    SectorComponentRecord,
+    SectorFlowRecord,
+    WindowSection,
+)
 from app.raw_enricher import TONGHUASHUN_CONCEPT_DETAIL_URL, TONGHUASHUN_CONCEPT_INDEX_URL
 from app.sources.tonghuashun import (
     TONGHUASHUN_10D_URL,
@@ -25,6 +33,8 @@ WINDOW_LABELS = {
 }
 EASTMONEY_CONCEPT_LIST_URL = "https://data.eastmoney.com/bkzj/gn.html"
 EASTMONEY_CONCEPT_DETAIL_URL = "https://data.eastmoney.com/bkzj/{sector_code}.html"
+EASTMONEY_FUND_DETAIL_URL = "https://fund.eastmoney.com/{fund_code}.html"
+EASTMONEY_FUND_RANK_URL = "https://fund.eastmoney.com/data/fundranking.html"
 TONGHUASHUN_WINDOW_URLS = {
     1: TONGHUASHUN_1D_URL,
     3: TONGHUASHUN_3D_URL,
@@ -173,6 +183,16 @@ def _render_sector_chip(
     )
 
 
+def _render_plain_chip(
+    label: str,
+    heat: int,
+    occurrences: list[str],
+) -> str:
+    title = " / ".join(occurrences) or label
+    badge = f"<span class='chip-count'>{heat}</span>" if heat > 1 else ""
+    return f"<span class='chip {_heat_class(heat)}' title='{escape(title)}'>{escape(label)}{badge}</span>"
+
+
 def _render_chip_list(
     items: list[str],
     sector_links: dict[str, str],
@@ -210,6 +230,228 @@ def _render_warning_list(warnings: list[str]) -> str:
     """
 
 
+def _render_markdown_inline(text: str) -> str:
+    escaped = escape(text)
+    code_tokens: dict[str, str] = {}
+
+    def _replace_code(match: re.Match[str]) -> str:
+        token = f"__AI_CODE_{len(code_tokens)}__"
+        code_tokens[token] = f"<code>{match.group(1)}</code>"
+        return token
+
+    escaped = re.sub(r"`([^`\n]+)`", _replace_code, escaped)
+    escaped = re.sub(
+        r"\[([^\]]+)\]\((https?://[^\s)]+)\)",
+        (
+            r"<a class='ai-inline-link' href='\2' target='_blank' rel='noreferrer noopener'>"
+            r"\1</a>"
+        ),
+        escaped,
+    )
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+    escaped = re.sub(r"__(.+?)__", r"<strong>\1</strong>", escaped)
+    escaped = re.sub(r"(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)", r"<em>\1</em>", escaped)
+    escaped = re.sub(r"(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)", r"<em>\1</em>", escaped)
+    for token, html in code_tokens.items():
+        escaped = escaped.replace(token, html)
+    return escaped
+
+
+def _is_markdown_hr(line: str) -> bool:
+    return bool(re.fullmatch(r"\s*(?:[-*_]\s*){3,}\s*", line))
+
+
+def _is_markdown_table_separator(line: str) -> bool:
+    return bool(
+        re.fullmatch(r"\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*", line)
+    )
+
+
+def _parse_markdown_table_row(line: str) -> list[str]:
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    return [cell.strip() for cell in stripped.split("|")]
+
+
+def _looks_like_markdown_table(lines: list[str], idx: int) -> bool:
+    if idx + 1 >= len(lines):
+        return False
+    return "|" in lines[idx] and _is_markdown_table_separator(lines[idx + 1])
+
+
+def _is_markdown_block_start(lines: list[str], idx: int) -> bool:
+    if idx >= len(lines):
+        return False
+    stripped = lines[idx].strip()
+    if not stripped:
+        return False
+    return (
+        stripped.startswith("```")
+        or stripped.startswith(">")
+        or _is_markdown_hr(stripped)
+        or _looks_like_markdown_table(lines, idx)
+        or bool(re.match(r"^(#{1,4})\s+.+$", stripped))
+        or bool(re.match(r"^\d+[.)、]\s+.+$", stripped))
+        or bool(re.match(r"^[-*+]\s+.+$", stripped))
+    )
+
+
+def _render_markdown_paragraph(lines: list[str]) -> str:
+    content = "<br />".join(_render_markdown_inline(line.strip()) for line in lines if line.strip())
+    return f"<p>{content}</p>"
+
+
+def _render_markdown_table(lines: list[str], start_idx: int) -> tuple[str, int]:
+    headers = _parse_markdown_table_row(lines[start_idx])
+    rows: list[list[str]] = []
+    idx = start_idx + 2
+    while idx < len(lines):
+        stripped = lines[idx].strip()
+        if not stripped or "|" not in lines[idx]:
+            break
+        rows.append(_parse_markdown_table_row(lines[idx]))
+        idx += 1
+
+    header_html = "".join(f"<th>{_render_markdown_inline(cell)}</th>" for cell in headers)
+    row_html = "".join(
+        "<tr>"
+        + "".join(f"<td>{_render_markdown_inline(cell)}</td>" for cell in row)
+        + "</tr>"
+        for row in rows
+    )
+    return (
+        "<div class='ai-table-wrap'>"
+        "<table class='ai-table'>"
+        f"<thead><tr>{header_html}</tr></thead>"
+        f"<tbody>{row_html}</tbody>"
+        "</table>"
+        "</div>",
+        idx,
+    )
+
+
+def _render_markdown_blocks(text: str) -> str:
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    parts: list[str] = []
+    idx = 0
+
+    while idx < len(lines):
+        stripped = lines[idx].strip()
+        if not stripped:
+            idx += 1
+            continue
+
+        if stripped.startswith("```"):
+            language = stripped[3:].strip()
+            code_lines: list[str] = []
+            idx += 1
+            while idx < len(lines) and not lines[idx].strip().startswith("```"):
+                code_lines.append(lines[idx].rstrip())
+                idx += 1
+            if idx < len(lines):
+                idx += 1
+            code_html = escape("\n".join(code_lines))
+            language_html = (
+                f"<div class='ai-code-lang'>{escape(language)}</div>" if language else ""
+            )
+            parts.append(
+                "<div class='ai-code-block'>"
+                f"{language_html}<pre><code>{code_html}</code></pre>"
+                "</div>"
+            )
+            continue
+
+        if _looks_like_markdown_table(lines, idx):
+            table_html, idx = _render_markdown_table(lines, idx)
+            parts.append(table_html)
+            continue
+
+        if _is_markdown_hr(stripped):
+            parts.append("<hr class='ai-divider' />")
+            idx += 1
+            continue
+
+        heading_match = re.match(r"^(#{1,4})\s+(.+)$", stripped)
+        if heading_match:
+            level = min(6, 2 + len(heading_match.group(1)))
+            parts.append(
+                f"<h{level}>{_render_markdown_inline(heading_match.group(2).strip())}</h{level}>"
+            )
+            idx += 1
+            continue
+
+        if stripped.startswith(">"):
+            quote_lines: list[str] = []
+            while idx < len(lines) and lines[idx].strip().startswith(">"):
+                quote_lines.append(re.sub(r"^\s*>\s?", "", lines[idx]))
+                idx += 1
+            quote_html = _render_markdown_blocks("\n".join(quote_lines))
+            parts.append(f"<blockquote>{quote_html}</blockquote>")
+            continue
+
+        ordered_match = re.match(r"^\d+[.)、]\s+(.+)$", stripped)
+        unordered_match = re.match(r"^[-*+]\s+(.+)$", stripped)
+        if ordered_match or unordered_match:
+            pattern = (
+                re.compile(r"^\d+[.)、]\s+(.+)$")
+                if ordered_match
+                else re.compile(r"^[-*+]\s+(.+)$")
+            )
+            tag = "ol" if ordered_match else "ul"
+            items: list[str] = []
+            while idx < len(lines):
+                current = lines[idx].strip()
+                if not current:
+                    break
+                item_match = pattern.match(current)
+                if not item_match:
+                    break
+                item_lines = [item_match.group(1).strip()]
+                idx += 1
+                while idx < len(lines):
+                    continuation = lines[idx].strip()
+                    if not continuation or _is_markdown_block_start(lines, idx):
+                        break
+                    item_lines.append(continuation)
+                    idx += 1
+                item_html = "<br />".join(_render_markdown_inline(line) for line in item_lines)
+                items.append(f"<li>{item_html}</li>")
+            parts.append(f"<{tag}>{''.join(items)}</{tag}>")
+            continue
+
+        paragraph_lines: list[str] = []
+        while idx < len(lines):
+            current = lines[idx].strip()
+            if not current:
+                break
+            if paragraph_lines and _is_markdown_block_start(lines, idx):
+                break
+            paragraph_lines.append(lines[idx])
+            idx += 1
+        parts.append(_render_markdown_paragraph(paragraph_lines))
+
+    return "".join(parts)
+
+
+def _render_ai_summary(summary_text: str | None) -> str:
+    if not summary_text:
+        return ""
+    summary_text = summary_text.strip()
+    if not summary_text:
+        return ""
+    content = _render_markdown_blocks(summary_text)
+    return f"""
+    <section class="ai-card">
+      <h2>AI 归类参考</h2>
+      <div class="ai-content">{content}</div>
+      <p class="ai-note">仅供参考，不构成投资建议。</p>
+    </section>
+    """
+
+
 def _render_tab_bar(trade_date: str) -> str:
     tabs = [
         ("summary", "摘要"),
@@ -218,6 +460,7 @@ def _render_tab_bar(trade_date: str) -> str:
         ("window-5", "近5日"),
         ("window-10", "近10日"),
         ("window-20", "近20日"),
+        ("fund-rank", "基金排行"),
         ("components", "成分股"),
         ("funds", "基金"),
     ]
@@ -291,6 +534,112 @@ def _build_source_url(source_key: str, window_days: int) -> str | None:
     if source_key == "eastmoney":
         return EASTMONEY_CONCEPT_LIST_URL
     return TONGHUASHUN_WINDOW_URLS.get(window_days)
+
+
+def _render_fund_link(record: FundRankRecord) -> str:
+    fund_code = record.fund_code.strip()
+    if not re.fullmatch(r"\d{6}", fund_code):
+        return escape(record.fund_name)
+    fund_url = EASTMONEY_FUND_DETAIL_URL.format(fund_code=fund_code)
+    return (
+        f"<a class='fund-link' href='{escape(fund_url)}' target='_blank' rel='noreferrer noopener'>"
+        f"{escape(record.fund_name)}</a>"
+    )
+
+
+def _fund_rank_active_value(record: FundRankRecord, ranking_period: str) -> float | None:
+    if ranking_period == "day":
+        return record.daily_growth_pct
+    if ranking_period == "week":
+        return record.weekly_growth_pct
+    return record.monthly_growth_pct
+
+
+def _fmt_net_value(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:.4f}".rstrip("0").rstrip(".")
+
+
+def _render_holding_chips(holdings: list[FundHoldingRecord]) -> str:
+    if not holdings:
+        return "<span class='empty-text'>暂无</span>"
+    return "".join(
+        f"<span class='holding-chip' title='占净值比例 {_fmt_pct(holding.net_value_ratio)}'>"
+        f"{escape(holding.stock_name)}</span>"
+        for holding in holdings[:5]
+    )
+
+
+def _render_fund_rank_table(
+    section: FundRankSection,
+    fund_holdings: dict[str, list[FundHoldingRecord]],
+) -> str:
+    rows = []
+    for record in section.records:
+        active_value = _fund_rank_active_value(record, section.ranking_period)
+        holdings = fund_holdings.get(record.fund_code, [])
+        rows.append(
+            f"""
+            <tr>
+              <td>{record.rank_no or "-"}</td>
+              <td>
+                <div>{_render_fund_link(record)}</div>
+                <span class="fund-code">{escape(record.fund_code)}</span>
+              </td>
+              <td>{escape(record.net_value_date or "-")}</td>
+              <td>{_fmt_net_value(record.unit_net_value)}</td>
+              <td class="fund-rank-active">{_fmt_pct(active_value)}</td>
+              <td><div class="holding-row">{_render_holding_chips(holdings)}</div></td>
+            </tr>
+            """
+        )
+
+    note_html = f"<p class='note'>{escape(section.note)}</p>" if section.note else ""
+    body = "\n".join(rows) if rows else "<tr><td colspan='6'>暂无数据</td></tr>"
+    return f"""
+    <div class="table-card">
+      <div class="table-head">
+        <h3>{escape(section.title)}</h3>
+        <span class="source">{escape(section.value_label)}排序</span>
+      </div>
+      {note_html}
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>基金</th>
+            <th>净值日期</th>
+            <th>单位净值</th>
+            <th>{escape(section.value_label)}</th>
+            <th>前五持仓</th>
+          </tr>
+        </thead>
+        <tbody>
+          {body}
+        </tbody>
+      </table>
+    </div>
+    """
+
+
+def _render_fund_rank_sections(payload: dict) -> str:
+    sections = payload["fund_rank_sections"]
+    fund_holdings = payload.get("fund_holdings", {})
+    snapshot_date = payload.get("fund_rank_snapshot_date") or payload["trade_date"]
+    return f"""
+    <section id="fund-rank" class="section-card anchor-section">
+      <div class="section-head">
+        <h2>基金排行榜</h2>
+        {_render_source_badge(f"天天基金 {snapshot_date}", EASTMONEY_FUND_RANK_URL)}
+      </div>
+      <div class="rank-grid">
+        {_render_fund_rank_table(sections["day"], fund_holdings)}
+        {_render_fund_rank_table(sections["week"], fund_holdings)}
+        {_render_fund_rank_table(sections["month"], fund_holdings)}
+      </div>
+    </section>
+    """
 
 
 def _render_source_table(
@@ -462,6 +811,31 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
     sector_heat = payload["sector_heat"]
     sector_occurrences = payload["sector_occurrences"]
     warnings_html = _render_warning_list(payload["warnings"])
+    ai_summary_html = _render_ai_summary(payload.get("ai_summary"))
+    repeated_focus_html = (
+        "".join(
+            _render_plain_chip(
+                label,
+                payload["repeated_focus_heat"].get(label, 1),
+                payload["repeated_focus_occurrences"].get(label, []),
+            )
+            for label in payload["repeated_focus"]
+        )
+        if payload["repeated_focus"]
+        else "<span class='empty-text'>暂无</span>"
+    )
+    persistent_focus_html = (
+        "".join(
+            _render_plain_chip(
+                label,
+                payload["persistent_focus_heat"].get(label, 1),
+                payload["persistent_focus_occurrences"].get(label, []),
+            )
+            for label in payload["persistent_focus"]
+        )
+        if payload["persistent_focus"]
+        else "<span class='empty-text'>暂无</span>"
+    )
     tab_bar_html = _render_tab_bar(payload["trade_date"])
     summary_html = f"""
     <section id="summary" class="hero anchor-section">
@@ -475,13 +849,13 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         <div class="summary-card summary-card-dark">
           <h3>高重复热点</h3>
           <div class="chip-row">
-            {_render_chip_list(payload["repeated_focus"], sector_links, sector_heat, sector_occurrences, empty_text="暂无", show_source_badges=True)}
+            {repeated_focus_html}
           </div>
         </div>
         <div class="summary-card summary-card-dark">
           <h3>跨周期持续热点</h3>
           <div class="chip-row">
-            {_render_chip_list(payload["persistent_focus"], sector_links, sector_heat, sector_occurrences, empty_text="暂无", show_source_badges=True)}
+            {persistent_focus_html}
           </div>
         </div>
       </div>
@@ -505,6 +879,7 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         )
         for window_days in (1, 3, 5, 10, 20)
     )
+    fund_rank_html = _render_fund_rank_sections(payload)
 
     component_note = ""
     if payload["component_unmatched_sectors"]:
@@ -553,6 +928,36 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         .summary-card-dark .empty-text {{ color:rgba(255,255,255,.72); }}
         .warning-card {{ margin-top:12px; border:1px solid #fecaca; background:#fff7ed; }}
         .warning-card ul {{ margin:0; padding-left:18px; color:#9a3412; line-height:1.7; }}
+        .ai-card {{ margin-top:12px; border:1px solid #bfdbfe; background:#eff6ff; color:#1e3a8a; border-radius:16px; padding:14px; box-shadow:0 10px 24px rgba(15,23,42,.06); }}
+        .ai-card h2 {{ margin:0 0 10px; color:#1d4ed8; }}
+        .ai-content {{ display:grid; gap:10px; color:#1e3a8a; }}
+        .ai-content h3,.ai-content h4,.ai-content h5,.ai-content h6 {{ margin:8px 0 0; color:#1d4ed8; line-height:1.35; }}
+        .ai-content h3 {{ font-size:17px; }}
+        .ai-content h4 {{ font-size:15px; }}
+        .ai-content h5 {{ font-size:14px; }}
+        .ai-content h6 {{ font-size:13px; }}
+        .ai-content p {{ margin:0; line-height:1.8; color:#1e293b; }}
+        .ai-content ol,.ai-content ul {{ margin:0; padding-left:22px; line-height:1.8; display:grid; gap:6px; }}
+        .ai-content li {{ margin:0; color:#1e293b; }}
+        .ai-content strong {{ color:#172554; font-weight:800; }}
+        .ai-content em {{ color:#1d4ed8; font-style:italic; }}
+        .ai-content code {{ display:inline-block; padding:1px 6px; border-radius:6px; background:rgba(29,78,216,.12); color:#172554; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; }}
+        .ai-inline-link {{ color:#1d4ed8; text-decoration:none; font-weight:700; }}
+        .ai-inline-link:hover {{ text-decoration:underline; }}
+        .ai-divider {{ margin:2px 0; border:none; border-top:1px dashed #93c5fd; }}
+        .ai-content blockquote {{ margin:0; padding:10px 12px; border-left:4px solid #60a5fa; border-radius:12px; background:rgba(255,255,255,.55); color:#1e3a8a; }}
+        .ai-content blockquote > :first-child {{ margin-top:0; }}
+        .ai-content blockquote > :last-child {{ margin-bottom:0; }}
+        .ai-code-block {{ overflow:hidden; border:1px solid rgba(29,78,216,.18); border-radius:12px; background:#0f172a; box-shadow:inset 0 1px 0 rgba(255,255,255,.04); }}
+        .ai-code-lang {{ padding:8px 12px; background:rgba(255,255,255,.06); color:#bfdbfe; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }}
+        .ai-code-block pre {{ margin:0; padding:12px; overflow:auto; }}
+        .ai-code-block pre code {{ display:block; padding:0; border-radius:0; background:none; color:#e2e8f0; font-size:12px; line-height:1.65; }}
+        .ai-table-wrap {{ overflow:auto; border:1px solid #bfdbfe; border-radius:12px; background:rgba(255,255,255,.78); }}
+        .ai-table {{ width:100%; min-width:420px; border-collapse:collapse; }}
+        .ai-table th,.ai-table td {{ padding:8px 10px; border-bottom:1px solid #dbeafe; text-align:left; vertical-align:top; font-size:13px; line-height:1.6; color:#1e293b; }}
+        .ai-table th {{ background:rgba(191,219,254,.35); color:#1d4ed8; font-weight:700; }}
+        .ai-table tr:last-child td {{ border-bottom:none; }}
+        .ai-note {{ margin:10px 0 0; font-size:12px; color:#475569; }}
         .tab-bar {{ position:sticky; top:8px; z-index:40; margin-top:12px; padding:8px 10px; border-radius:14px; background:rgba(255,255,255,.92); box-shadow:0 10px 24px rgba(15,23,42,.08); backdrop-filter:blur(10px); }}
         .tab-scroll {{ display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; }}
         .tab-scroll::-webkit-scrollbar {{ display:none; }}
@@ -591,8 +996,13 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         tr.row-heat-4 td {{ background:#fff7ed; }}
         tr.row-heat-5 td {{ background:#fee2e2; }}
         .source {{ color:#1d4ed8; font-size:12px; font-weight:700; white-space:nowrap; }}
-        .source-link,.sector-link,.stock-link {{ color:#1d4ed8; text-decoration:none; }}
-        .source-link:hover,.sector-link:hover,.stock-link:hover {{ text-decoration:underline; }}
+        .source-link,.sector-link,.stock-link,.fund-link {{ color:#1d4ed8; text-decoration:none; }}
+        .source-link:hover,.sector-link:hover,.stock-link:hover,.fund-link:hover {{ text-decoration:underline; }}
+        .rank-grid {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }}
+        .fund-code {{ display:block; margin-top:2px; color:#64748b; font-size:12px; }}
+        .fund-rank-active {{ color:#b91c1c; font-weight:800; }}
+        .holding-row {{ display:flex; flex-wrap:wrap; gap:4px; max-width:260px; }}
+        .holding-chip {{ display:inline-flex; max-width:96px; padding:2px 6px; border-radius:999px; background:#f1f5f9; color:#334155; font-size:12px; line-height:1.5; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
         .note {{ margin:0 0 10px; color:#9a3412; font-size:12px; line-height:1.6; }}
         .component-grid,.fund-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:10px; }}
         .component-card,.fund-card {{ border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; background:#fff; }}
@@ -602,7 +1012,7 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         .fund-card li {{ line-height:1.6; font-size:13px; }}
         .footer {{ margin:12px 0 0; color:#64748b; font-size:12px; }}
         @media (max-width: 1080px) {{
-          .hero-head,.hero-panel-grid,.summary-grid,.table-grid {{ grid-template-columns:1fr; }}
+          .hero-head,.hero-panel-grid,.summary-grid,.table-grid,.rank-grid {{ grid-template-columns:1fr; }}
         }}
         @media (max-width: 640px) {{
           .wrap {{ padding:12px; }}
@@ -614,8 +1024,10 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
       <div class="wrap">
         {summary_html}
         {warnings_html}
+        {ai_summary_html}
         {tab_bar_html}
         {windows_html}
+        {fund_rank_html}
         <section id="components" class="section-card anchor-section">
           <div class="section-head">
             <h2>概念前十成分股</h2>

@@ -7,6 +7,7 @@
 - 东方财富 `1/3/5/10` 日公开接口 + 东方财富 `20` 日历史累计
 - 同花顺 `1/3/5/10/20` 日公开页面
 - 邮件正文直接展示双榜单和差异摘要
+- 天天基金开放式基金当日、近一周、近一月排行榜
 - 若某一数据源抓取失败，邮件仍会发送，并在顶部显式告警
 
 ## 目录
@@ -53,6 +54,28 @@ python3 -m app.cli run-once
 ./scripts/run_daily.sh
 ```
 
+## AI 归类参考
+
+支持可选接入 OpenAI 兼容接口，为统计模块补一段 AI 归类参考：
+
+- 默认关闭
+- 开启后会在报告顶部增加 `AI 归类参考`
+- 只输出观察和风险提示，不应作为投资决策依据
+
+配置方式：
+
+```json
+{
+  "ai": {
+    "enabled": true,
+    "provider": "openai_compatible",
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "YOUR_API_KEY",
+    "model": "gpt-4.1-mini"
+  }
+}
+```
+
 ## GitHub 定时执行
 
 仓库已可直接接入 GitHub Actions，workflow 文件为 `.github/workflows/stock-daily-report.yml`。
@@ -69,6 +92,11 @@ python3 -m app.cli run-once
 - `STOCK_REPORT_SMTP_PASSWORD`
 - `STOCK_REPORT_SMTP_SENDER`
 - `STOCK_REPORT_RECIPIENTS_JSON`，示例：`["a@example.com","b@example.com"]`
+- `STOCK_REPORT_AI_ENABLED`，示例：`true`
+- `STOCK_REPORT_AI_PROVIDER`，示例：`openai_compatible`
+- `STOCK_REPORT_AI_BASE_URL`
+- `STOCK_REPORT_AI_API_KEY`
+- `STOCK_REPORT_AI_MODEL`
 
 可选 GitHub Variables：
 
@@ -99,6 +127,7 @@ python3 -m app.cli schedule
 
 - 东方财富：`1/3/5/10` 日公开接口
 - 东方财富历史累计：基于板块历史资金流接口汇总 `20` 个交易日
+- 天天基金：开放式基金排行 `日增长率/近1周/近1月`
 - 同花顺：`1/3/5/10/20` 日公开页面
 - 同花顺概念详情页：用于 Top10 概念成分股补充
 

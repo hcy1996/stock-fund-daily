@@ -5,9 +5,16 @@ from pathlib import Path
 import re
 import sqlite3
 
-from app.models import SectorFlowRecord, WindowSection
+from app.models import FundHoldingRecord, FundRankRecord, FundRankSection, SectorFlowRecord, WindowSection
 from app.raw_enricher import load_tonghuashun_top_components
-from app.storage import get_window_records, latest_trade_date
+from app.sources.fund_rank import EASTMONEY_FUND_RANK_PERIODS
+from app.storage import (
+    get_fund_rank_records,
+    get_latest_fund_holdings,
+    get_window_records,
+    latest_fund_rank_snapshot_date,
+    latest_trade_date,
+)
 
 
 WINDOW_DAYS = (1, 3, 5, 10, 20)
@@ -73,10 +80,23 @@ _GENERIC_SUFFIXES = (
     "Ⅱ",
     "I",
 )
+SMART_GROUP_RULES = (
+    ("电池新能源链", ("电池", "锂", "盐湖提锂", "铜箔", "回收", "PVDF", "能源金属")),
+    ("化工材料链", ("化肥", "化工", "磷", "氟", "草甘膦", "钛白粉")),
+    ("半导体光刻链", ("半导体", "中芯", "海思", "芯片", "光刻", "封装", "CPO")),
+)
 
 
 def _row_to_record(row: sqlite3.Row) -> SectorFlowRecord:
     return SectorFlowRecord(**dict(row))
+
+
+def _row_to_fund_rank_record(row: sqlite3.Row) -> FundRankRecord:
+    return FundRankRecord(**dict(row))
+
+
+def _row_to_fund_holding_record(row: sqlite3.Row) -> FundHoldingRecord:
+    return FundHoldingRecord(**dict(row))
 
 
 def _normalize_sector_name(name: str) -> str:
@@ -132,6 +152,20 @@ def _format_pair_name(name_a: str, name_b: str) -> str:
     if name_a == name_b or _sector_match_key(name_a) == _sector_match_key(name_b):
         return name_a
     return f"{name_a} ≈ {name_b}"
+
+
+def _match_group_label(sector_name: str) -> str | None:
+    key = _sector_match_key(sector_name)
+    best_label: str | None = None
+    best_score = 0
+    for label, keywords in SMART_GROUP_RULES:
+        for keyword in keywords:
+            if keyword in key:
+                score = len(keyword)
+                if score > best_score:
+                    best_score = score
+                    best_label = label
+    return best_label
 
 
 def _build_similar_pairs(
@@ -197,6 +231,36 @@ def _build_window_section(
         records=records,
         note=note,
     )
+
+
+def _build_fund_rank_sections(
+    conn: sqlite3.Connection,
+    top_n: int,
+) -> tuple[str | None, dict[str, FundRankSection], list[str]]:
+    snapshot_date = latest_fund_rank_snapshot_date(conn)
+    sections: dict[str, FundRankSection] = {}
+    warnings: list[str] = []
+
+    for period, config in EASTMONEY_FUND_RANK_PERIODS.items():
+        records: list[FundRankRecord] = []
+        if snapshot_date:
+            records = [
+                _row_to_fund_rank_record(row)
+                for row in get_fund_rank_records(conn, snapshot_date, period, limit=top_n)
+            ]
+        note = None
+        if not records:
+            note = f"天天基金{config['title']}缺失，本次报告不展示该窗口。"
+            warnings.append(f"基金排行榜缺失：{config['title']}。")
+        sections[period] = FundRankSection(
+            title=str(config["title"]),
+            ranking_period=period,
+            value_label=str(config["value_label"]),
+            records=records,
+            note=note,
+        )
+
+    return snapshot_date, sections, warnings
 
 
 def _build_comparison(
@@ -270,10 +334,71 @@ def _build_signal_summary(
         key=lambda name: (-len(sector_window_days[name]), -sector_heat[name], sector_best_rank[name], name),
     )
     persistent_hot = persistent_candidates[:12]
-    repeated_focus = repeated_hot[:10]
-    persistent_focus = [name for name in persistent_candidates if name not in repeated_focus][:10]
+
+    def build_grouped_focus(
+        candidates: list[str],
+        *,
+        exclude: set[str] | None = None,
+    ) -> tuple[list[str], dict[str, int], dict[str, list[str]]]:
+        exclude = exclude or set()
+        grouped: dict[str, dict] = {}
+        singles: list[str] = []
+        for sector_name in candidates:
+            if sector_name in exclude:
+                continue
+            label = _match_group_label(sector_name)
+            if not label:
+                singles.append(sector_name)
+                continue
+            bucket = grouped.setdefault(
+                label,
+                {
+                    "members": [],
+                    "heat": 0,
+                    "window_days": set(),
+                    "best_rank": 999,
+                },
+            )
+            bucket["members"].append(sector_name)
+            bucket["heat"] += sector_heat[sector_name]
+            bucket["window_days"].update(sector_window_days[sector_name])
+            bucket["best_rank"] = min(bucket["best_rank"], sector_best_rank[sector_name])
+
+        labels: list[str] = []
+        label_heat: dict[str, int] = {}
+        label_occurrences: dict[str, list[str]] = {}
+
+        grouped_items = sorted(
+            grouped.items(),
+            key=lambda item: (-item[1]["heat"], -len(item[1]["window_days"]), item[1]["best_rank"], item[0]),
+        )
+        for label, bucket in grouped_items:
+            members = list(dict.fromkeys(bucket["members"]))
+            if len(members) < 2:
+                singles.extend(members)
+                continue
+            labels.append(label)
+            label_heat[label] = int(bucket["heat"])
+            label_occurrences[label] = [f"归类：{'、'.join(members[:6])}"]
+
+        singles = list(dict.fromkeys(singles))
+        singles.sort(key=lambda name: (-sector_heat[name], -len(sector_window_days[name]), sector_best_rank[name], name))
+        for name in singles:
+            labels.append(name)
+            label_heat[name] = sector_heat[name]
+            label_occurrences[name] = [
+                f"出现窗口：{len(sector_window_days[name])} 个",
+                *sector_occurrences[name][:4],
+            ]
+        return labels[:10], label_heat, label_occurrences
+
+    repeated_focus, repeated_focus_heat, repeated_focus_occurrences = build_grouped_focus(repeated_candidates)
+    persistent_focus, persistent_focus_heat, persistent_focus_occurrences = build_grouped_focus(
+        persistent_candidates,
+        exclude=set(repeated_focus),
+    )
     if not persistent_focus:
-        persistent_focus = persistent_hot[:6]
+        persistent_focus, persistent_focus_heat, persistent_focus_occurrences = build_grouped_focus(persistent_candidates)
     consensus_hot = comparisons[1]["similar"][:8]
     divergence_hot = list(
         dict.fromkeys(
@@ -296,8 +421,12 @@ def _build_signal_summary(
         "sector_window_days": {name: sorted(days) for name, days in sector_window_days.items()},
         "repeated_hot": repeated_hot,
         "repeated_focus": repeated_focus,
+        "repeated_focus_heat": repeated_focus_heat,
+        "repeated_focus_occurrences": repeated_focus_occurrences,
         "persistent_hot": persistent_hot,
         "persistent_focus": persistent_focus,
+        "persistent_focus_heat": persistent_focus_heat,
+        "persistent_focus_occurrences": persistent_focus_occurrences,
         "consensus_hot": consensus_hot,
         "divergence_hot": divergence_hot,
         "conclusions": conclusions,
@@ -317,6 +446,7 @@ def _pick_primary_source(source_windows: dict[str, dict[int, WindowSection]]) ->
 def build_report_payload(
     conn: sqlite3.Connection,
     top_n: int,
+    stats_top_n: int,
     funds_per_sector: int,
     fund_catalog: list[dict],
     match_funds_fn,
@@ -333,15 +463,35 @@ def build_report_payload(
         }
         for source_key in SOURCE_LABELS
     }
+    source_windows_stats = {
+        source_key: {
+            window_days: _build_window_section(conn, trade_date, source_key, window_days, stats_top_n)
+            for window_days in WINDOW_DAYS
+        }
+        for source_key in SOURCE_LABELS
+    }
     comparisons = {
         window_days: _build_comparison(
-            source_windows["eastmoney"][window_days],
-            source_windows["tonghuashun"][window_days],
+            source_windows_stats["eastmoney"][window_days],
+            source_windows_stats["tonghuashun"][window_days],
         )
         for window_days in WINDOW_DAYS
     }
     warnings = _build_warning_messages(source_windows)
-    signal_summary = _build_signal_summary(source_windows, comparisons)
+    fund_rank_snapshot_date, fund_rank_sections, fund_rank_warnings = _build_fund_rank_sections(conn, top_n)
+    warnings.extend(fund_rank_warnings)
+    fund_codes = list(
+        dict.fromkeys(
+            record.fund_code
+            for section in fund_rank_sections.values()
+            for record in section.records
+        )
+    )
+    fund_holdings = {
+        fund_code: [_row_to_fund_holding_record(row) for row in rows]
+        for fund_code, rows in get_latest_fund_holdings(conn, fund_codes, limit_per_fund=10).items()
+    }
+    signal_summary = _build_signal_summary(source_windows_stats, comparisons)
     primary_source = _pick_primary_source(source_windows)
 
     focus_names = list(
@@ -378,6 +528,9 @@ def build_report_payload(
         "source_windows": source_windows,
         "comparisons": comparisons,
         "warnings": warnings,
+        "fund_rank_snapshot_date": fund_rank_snapshot_date,
+        "fund_rank_sections": fund_rank_sections,
+        "fund_holdings": fund_holdings,
         "primary_source": primary_source,
         "leaders_by_source": {
             source_key: [record.sector_name for record in source_windows[source_key][1].records]
@@ -396,8 +549,12 @@ def build_report_payload(
         "sector_window_days": signal_summary["sector_window_days"],
         "repeated_hot": signal_summary["repeated_hot"],
         "repeated_focus": signal_summary["repeated_focus"],
+        "repeated_focus_heat": signal_summary["repeated_focus_heat"],
+        "repeated_focus_occurrences": signal_summary["repeated_focus_occurrences"],
         "persistent_hot": signal_summary["persistent_hot"],
         "persistent_focus": signal_summary["persistent_focus"],
+        "persistent_focus_heat": signal_summary["persistent_focus_heat"],
+        "persistent_focus_occurrences": signal_summary["persistent_focus_occurrences"],
         "consensus_hot": signal_summary["consensus_hot"],
         "divergence_hot": signal_summary["divergence_hot"],
         "conclusions": signal_summary["conclusions"],

@@ -53,6 +53,15 @@ class MetaConfig:
 
 
 @dataclass(slots=True)
+class AIConfig:
+    enabled: bool
+    provider: str
+    base_url: str
+    api_key: str
+    model: str
+
+
+@dataclass(slots=True)
 class AppConfig:
     smtp: SMTPConfig
     recipients: list[str]
@@ -61,6 +70,7 @@ class AppConfig:
     report: ReportConfig
     sources: SourcesConfig
     meta: MetaConfig
+    ai: AIConfig
     config_path: Path
     using_example_config: bool
 
@@ -87,6 +97,7 @@ def load_config(config_path: str | None = None) -> AppConfig:
     report = payload["report"]
     sources = payload["sources"]
     meta = payload.get("meta", {"report_name": "股票基金日报"})
+    ai = payload.get("ai", {})
 
     app_config = AppConfig(
         smtp=SMTPConfig(
@@ -118,6 +129,13 @@ def load_config(config_path: str | None = None) -> AppConfig:
             user_agent=sources["user_agent"],
         ),
         meta=MetaConfig(report_name=meta["report_name"]),
+        ai=AIConfig(
+            enabled=bool(ai.get("enabled", False)),
+            provider=str(ai.get("provider", "openai_compatible")),
+            base_url=str(ai.get("base_url", "")).strip(),
+            api_key=str(ai.get("api_key", "")).strip(),
+            model=str(ai.get("model", "")).strip(),
+        ),
         config_path=path,
         using_example_config=using_example,
     )

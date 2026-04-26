@@ -40,6 +40,11 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.STOCK_REPORT_SMTP_PASSWORD }}
           SMTP_SENDER: ${{ secrets.STOCK_REPORT_SMTP_SENDER }}
           REPORT_RECIPIENTS_JSON: ${{ secrets.STOCK_REPORT_RECIPIENTS_JSON }}
+          AI_ENABLED: ${{ secrets.STOCK_REPORT_AI_ENABLED }}
+          AI_PROVIDER: ${{ secrets.STOCK_REPORT_AI_PROVIDER }}
+          AI_BASE_URL: ${{ secrets.STOCK_REPORT_AI_BASE_URL }}
+          AI_API_KEY: ${{ secrets.STOCK_REPORT_AI_API_KEY }}
+          AI_MODEL: ${{ secrets.STOCK_REPORT_AI_MODEL }}
           SMTP_USE_SSL: ${{ vars.STOCK_REPORT_SMTP_USE_SSL }}
           SMTP_STARTTLS: ${{ vars.STOCK_REPORT_SMTP_STARTTLS }}
           REPORT_NAME: ${{ vars.STOCK_REPORT_NAME }}
@@ -118,6 +123,14 @@ jobs:
               "meta": {
                   "report_name": os.environ.get("REPORT_NAME", "").strip()
                   or "股票基金日报"
+              },
+              "ai": {
+                  "enabled": env_bool("AI_ENABLED", False),
+                  "provider": os.environ.get("AI_PROVIDER", "").strip()
+                  or "openai_compatible",
+                  "base_url": os.environ.get("AI_BASE_URL", "").strip(),
+                  "api_key": os.environ.get("AI_API_KEY", "").strip(),
+                  "model": os.environ.get("AI_MODEL", "").strip(),
               },
           }
 

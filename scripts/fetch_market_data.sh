@@ -86,6 +86,36 @@ fetch_eastmoney_file \
   "$EASTMONEY_DIR/10d.json" \
   10
 
+FUND_RANK_REFERER="https://fund.eastmoney.com/data/fundranking.html"
+
+fetch_file \
+  "https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=rzdf&st=desc&pi=1&pn=50&dx=1" \
+  "$EASTMONEY_DIR/fund_rank_day.js" \
+  eastmoney_fund_rank \
+  1 \
+  -A "$UA" \
+  -H "Referer: $FUND_RANK_REFERER"
+
+fetch_file \
+  "https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=zzf&st=desc&pi=1&pn=50&dx=1" \
+  "$EASTMONEY_DIR/fund_rank_week.js" \
+  eastmoney_fund_rank \
+  7 \
+  -A "$UA" \
+  -H "Referer: $FUND_RANK_REFERER"
+
+fetch_file \
+  "https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=1yzf&st=desc&pi=1&pn=50&dx=1" \
+  "$EASTMONEY_DIR/fund_rank_month.js" \
+  eastmoney_fund_rank \
+  30 \
+  -A "$UA" \
+  -H "Referer: $FUND_RANK_REFERER"
+
+if ! python3 -m app.cli fetch-fund-holdings; then
+  echo "warning: failed to update fund holdings, keep old file if exists" >&2
+fi
+
 fetch_file \
   "https://data.10jqka.com.cn/funds/gnzjl/field/tradezdf/order/desc/page/1/free/1/" \
   "$TONGHUASHUN_DIR/1d.html" \

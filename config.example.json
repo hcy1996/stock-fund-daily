@@ -31,5 +31,12 @@
   },
   "meta": {
     "report_name": "股票基金日报"
+  },
+  "ai": {
+    "enabled": false,
+    "provider": "openai_compatible",
+    "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+    "api_key": "",
+    "model": "ep-20250823103238-c2qj8"
   }
 }

@@ -4,7 +4,7 @@ import sqlite3
 from dataclasses import asdict
 from pathlib import Path
 
-from app.models import SectorFlowRecord
+from app.models import FundHoldingRecord, FundRankRecord, SectorFlowRecord
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -50,6 +50,36 @@ def init_db(conn: sqlite3.Connection) -> None:
             recipients TEXT NOT NULL,
             status TEXT NOT NULL,
             detail TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS fund_rank_snapshots (
+            snapshot_date TEXT NOT NULL,
+            ranking_period TEXT NOT NULL,
+            fund_code TEXT NOT NULL,
+            fund_name TEXT NOT NULL,
+            net_value_date TEXT,
+            unit_net_value REAL,
+            accumulated_net_value REAL,
+            daily_growth_pct REAL,
+            weekly_growth_pct REAL,
+            monthly_growth_pct REAL,
+            rank_no INTEGER,
+            raw_payload TEXT,
+            PRIMARY KEY (snapshot_date, ranking_period, fund_code)
+        );
+
+        CREATE TABLE IF NOT EXISTS fund_holding_snapshots (
+            fund_code TEXT NOT NULL,
+            fund_name TEXT NOT NULL,
+            report_date TEXT NOT NULL,
+            stock_code TEXT NOT NULL,
+            stock_name TEXT NOT NULL,
+            net_value_ratio REAL,
+            shares_wan REAL,
+            market_value_wan REAL,
+            rank_no INTEGER,
+            raw_payload TEXT,
+            PRIMARY KEY (fund_code, report_date, stock_code)
         );
         """
     )
@@ -171,6 +201,66 @@ def upsert_sector_flows(conn: sqlite3.Connection, records: list[SectorFlowRecord
     return len(records)
 
 
+def upsert_fund_ranks(conn: sqlite3.Connection, records: list[FundRankRecord]) -> int:
+    if not records:
+        return 0
+
+    conn.executemany(
+        """
+        INSERT INTO fund_rank_snapshots (
+            snapshot_date, ranking_period, fund_code, fund_name, net_value_date,
+            unit_net_value, accumulated_net_value, daily_growth_pct,
+            weekly_growth_pct, monthly_growth_pct, rank_no, raw_payload
+        ) VALUES (
+            :snapshot_date, :ranking_period, :fund_code, :fund_name, :net_value_date,
+            :unit_net_value, :accumulated_net_value, :daily_growth_pct,
+            :weekly_growth_pct, :monthly_growth_pct, :rank_no, :raw_payload
+        )
+        ON CONFLICT(snapshot_date, ranking_period, fund_code) DO UPDATE SET
+            fund_name=excluded.fund_name,
+            net_value_date=excluded.net_value_date,
+            unit_net_value=excluded.unit_net_value,
+            accumulated_net_value=excluded.accumulated_net_value,
+            daily_growth_pct=excluded.daily_growth_pct,
+            weekly_growth_pct=excluded.weekly_growth_pct,
+            monthly_growth_pct=excluded.monthly_growth_pct,
+            rank_no=excluded.rank_no,
+            raw_payload=excluded.raw_payload
+        """,
+        [asdict(record) for record in records],
+    )
+    conn.commit()
+    return len(records)
+
+
+def upsert_fund_holdings(conn: sqlite3.Connection, records: list[FundHoldingRecord]) -> int:
+    if not records:
+        return 0
+
+    conn.executemany(
+        """
+        INSERT INTO fund_holding_snapshots (
+            fund_code, fund_name, report_date, stock_code, stock_name,
+            net_value_ratio, shares_wan, market_value_wan, rank_no, raw_payload
+        ) VALUES (
+            :fund_code, :fund_name, :report_date, :stock_code, :stock_name,
+            :net_value_ratio, :shares_wan, :market_value_wan, :rank_no, :raw_payload
+        )
+        ON CONFLICT(fund_code, report_date, stock_code) DO UPDATE SET
+            fund_name=excluded.fund_name,
+            stock_name=excluded.stock_name,
+            net_value_ratio=excluded.net_value_ratio,
+            shares_wan=excluded.shares_wan,
+            market_value_wan=excluded.market_value_wan,
+            rank_no=excluded.rank_no,
+            raw_payload=excluded.raw_payload
+        """,
+        [asdict(record) for record in records],
+    )
+    conn.commit()
+    return len(records)
+
+
 def latest_trade_date(conn: sqlite3.Connection) -> str | None:
     row = conn.execute(
         """
@@ -182,6 +272,19 @@ def latest_trade_date(conn: sqlite3.Connection) -> str | None:
         """
     ).fetchone()
     return row["trade_date"] if row else None
+
+
+def latest_fund_rank_snapshot_date(conn: sqlite3.Connection) -> str | None:
+    row = conn.execute(
+        """
+        SELECT snapshot_date
+        FROM fund_rank_snapshots
+        GROUP BY snapshot_date
+        ORDER BY COUNT(DISTINCT ranking_period) DESC, snapshot_date DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    return row["snapshot_date"] if row else None
 
 
 def get_window_records(
@@ -205,6 +308,59 @@ def get_window_records(
         sql += " LIMIT ?"
         params.append(limit)
     return list(conn.execute(sql, params))
+
+
+def get_fund_rank_records(
+    conn: sqlite3.Connection,
+    snapshot_date: str,
+    ranking_period: str,
+    limit: int | None = None,
+) -> list[sqlite3.Row]:
+    sql = """
+        SELECT *
+        FROM fund_rank_snapshots
+        WHERE snapshot_date = ? AND ranking_period = ?
+        ORDER BY COALESCE(rank_no, 9999)
+    """
+    params: list[object] = [snapshot_date, ranking_period]
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
+    return list(conn.execute(sql, params))
+
+
+def get_latest_fund_holdings(
+    conn: sqlite3.Connection,
+    fund_codes: list[str],
+    limit_per_fund: int,
+) -> dict[str, list[sqlite3.Row]]:
+    holdings: dict[str, list[sqlite3.Row]] = {}
+    for fund_code in fund_codes:
+        latest_row = conn.execute(
+            """
+            SELECT MAX(report_date) AS report_date
+            FROM fund_holding_snapshots
+            WHERE fund_code = ?
+            """,
+            (fund_code,),
+        ).fetchone()
+        report_date = latest_row["report_date"] if latest_row else None
+        if not report_date:
+            holdings[fund_code] = []
+            continue
+        holdings[fund_code] = list(
+            conn.execute(
+                """
+                SELECT *
+                FROM fund_holding_snapshots
+                WHERE fund_code = ? AND report_date = ?
+                ORDER BY COALESCE(rank_no, 9999)
+                LIMIT ?
+                """,
+                (fund_code, report_date, limit_per_fund),
+            )
+        )
+    return holdings
 
 
 def get_recent_daily_rows(conn: sqlite3.Connection, limit_days: int) -> list[sqlite3.Row]:
