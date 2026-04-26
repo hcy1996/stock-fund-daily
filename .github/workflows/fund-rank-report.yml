@@ -31,6 +31,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Restore shared runtime cache
+        id: runtime-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/raw
+            data/stock_report.db
+          key: stock-report-runtime-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            stock-report-runtime-${{ github.ref_name }}-
+            stock-report-runtime-
+
       - name: Debug workflow context
         shell: bash
         run: |
@@ -43,6 +55,8 @@ jobs:
           echo "run_id=${{ github.run_id }}"
           echo "run_number=${{ github.run_number }}"
           echo "dry_run=${{ inputs.dry_run }}"
+          echo "runtime_cache_hit_exact=${{ steps.runtime-cache.outputs.cache-hit }}"
+          echo "runtime_cache_matched_key=${{ steps.runtime-cache.outputs.cache-matched-key }}"
           echo "workspace=$(pwd)"
           date '+runner_time=%F %T %Z'
           echo "::endgroup::"
@@ -387,6 +401,15 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: site
+
+      - name: Save shared runtime cache
+        if: ${{ always() && (hashFiles('data/stock_report.db') != '' || hashFiles('data/raw/**') != '') }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/raw
+            data/stock_report.db
+          key: stock-report-runtime-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   deploy-pages:
     if: ${{ needs.fund-rank-report.outputs.report_path != '' }}

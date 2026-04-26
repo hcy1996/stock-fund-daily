@@ -7,6 +7,13 @@ config.json
 output/*.html
 output/*.txt
 output/*.json
-data/raw/
 data/archive/
+data/raw/*
+!data/raw/eastmoney/
+data/raw/eastmoney/*
+!data/raw/eastmoney/fund_rank_*.js
+!data/raw/eastmoney/fund_holdings/
+data/raw/eastmoney/fund_holdings/*
+!data/raw/eastmoney/fund_holdings/*.js
 data/*.db
+!data/stock_report.db
