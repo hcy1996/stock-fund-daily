@@ -179,11 +179,18 @@ def build_ai_prompt(payload: dict) -> str:
     )
 
 
-def build_ai_summary(ai_config: AIConfig, payload: dict) -> str | None:
+def _truncate_error_text(value: str, limit: int = 180) -> str:
+    compact = " ".join(value.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3] + "..."
+
+
+def build_ai_summary_result(ai_config: AIConfig, payload: dict) -> tuple[str | None, str | None]:
     if not ai_config.enabled:
-        return None
+        return None, None
     if not ai_config.base_url or not ai_config.api_key or not ai_config.model:
-        return None
+        return None, "AI 已启用，但缺少 `base_url` / `api_key` / `model` 配置。"
 
     prompt = build_ai_prompt(payload)
     body = json.dumps(
@@ -199,10 +206,12 @@ def build_ai_summary(ai_config: AIConfig, payload: dict) -> str | None:
     }
     endpoints = [
         (
+            "responses",
             ai_config.base_url.rstrip("/") + "/responses",
             body,
         ),
         (
+            "chat.completions",
             ai_config.base_url.rstrip("/") + "/chat/completions",
             json.dumps(
                 {
@@ -213,8 +222,9 @@ def build_ai_summary(ai_config: AIConfig, payload: dict) -> str | None:
             ).encode("utf-8"),
         ),
     ]
+    errors: list[str] = []
 
-    for endpoint, request_body in endpoints:
+    for endpoint_name, endpoint, request_body in endpoints:
         req = request.Request(
             endpoint,
             data=request_body,
@@ -224,10 +234,31 @@ def build_ai_summary(ai_config: AIConfig, payload: dict) -> str | None:
         try:
             with request.urlopen(req, timeout=60) as resp:
                 response_payload = json.loads(resp.read().decode("utf-8"))
-        except (error.URLError, TimeoutError, json.JSONDecodeError, error.HTTPError):
+        except error.HTTPError as exc:
+            response_body = exc.read().decode("utf-8", errors="ignore")
+            errors.append(
+                f"{endpoint_name}: HTTP {exc.code} {_truncate_error_text(response_body or str(exc))}"
+            )
+            continue
+        except error.URLError as exc:
+            errors.append(f"{endpoint_name}: {exc.reason}")
+            continue
+        except TimeoutError as exc:
+            errors.append(f"{endpoint_name}: {exc}")
+            continue
+        except json.JSONDecodeError as exc:
+            errors.append(f"{endpoint_name}: JSONDecodeError {exc}")
             continue
 
         text = _extract_text(response_payload)
         if text:
-            return text
-    return None
+            return text, None
+        errors.append(f"{endpoint_name}: 返回成功，但没有提取到文本内容。")
+    if errors:
+        return None, "AI 请求失败：" + "；".join(errors[:2])
+    return None, "AI 请求失败：未返回可用结果。"
+
+
+def build_ai_summary(ai_config: AIConfig, payload: dict) -> str | None:
+    summary, _ = build_ai_summary_result(ai_config, payload)
+    return summary

@@ -7,7 +7,7 @@ import sys
 from zoneinfo import ZoneInfo
 
 from app.analyzer import build_report_payload
-from app.ai_summary import build_ai_summary
+from app.ai_summary import build_ai_summary_result
 from app.config import PROJECT_ROOT, load_config
 from app.emailer import send_html_email
 from app.fetch_status import fetch_succeeded, load_fetch_status
@@ -121,7 +121,11 @@ def generate_report(config) -> tuple[Path, str, str]:
         match_funds_fn=match_funds,
         raw_dir=config.storage.raw_dir,
     )
-    payload["ai_summary"] = build_ai_summary(config.ai, payload)
+    ai_summary, ai_warning = build_ai_summary_result(config.ai, payload)
+    payload["ai_summary"] = ai_summary
+    payload["ai_summary_warning"] = ai_warning
+    if ai_warning:
+        print(f"AI warning: {ai_warning}")
     html = render_html(payload, config.meta.report_name, raw_dir=config.storage.raw_dir)
     report_path = save_report(config.storage.output_dir, payload["trade_date"], html)
     subject = f"{config.meta.report_name} | {payload['trade_date']}"

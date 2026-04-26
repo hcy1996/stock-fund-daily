@@ -452,6 +452,17 @@ def _render_ai_summary(summary_text: str | None) -> str:
     """
 
 
+def _render_ai_warning(message: str | None) -> str:
+    if not message:
+        return ""
+    return f"""
+    <section class="ai-warning-card">
+      <h2>AI 归类参考未生成</h2>
+      <p>{escape(message)}</p>
+    </section>
+    """
+
+
 def _render_tab_bar(trade_date: str) -> str:
     tabs = [
         ("summary", "摘要"),
@@ -812,6 +823,7 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
     sector_occurrences = payload["sector_occurrences"]
     warnings_html = _render_warning_list(payload["warnings"])
     ai_summary_html = _render_ai_summary(payload.get("ai_summary"))
+    ai_warning_html = _render_ai_warning(payload.get("ai_summary_warning"))
     repeated_focus_html = (
         "".join(
             _render_plain_chip(
@@ -928,8 +940,12 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         .summary-card-dark .empty-text {{ color:rgba(255,255,255,.72); }}
         .warning-card {{ margin-top:12px; border:1px solid #fecaca; background:#fff7ed; }}
         .warning-card ul {{ margin:0; padding-left:18px; color:#9a3412; line-height:1.7; }}
-        .ai-card {{ margin-top:12px; border:1px solid #bfdbfe; background:#eff6ff; color:#1e3a8a; border-radius:16px; padding:14px; box-shadow:0 10px 24px rgba(15,23,42,.06); }}
+        .ai-card,.ai-warning-card {{ margin-top:12px; border-radius:16px; padding:14px; box-shadow:0 10px 24px rgba(15,23,42,.06); }}
+        .ai-card {{ border:1px solid #bfdbfe; background:#eff6ff; color:#1e3a8a; }}
         .ai-card h2 {{ margin:0 0 10px; color:#1d4ed8; }}
+        .ai-warning-card {{ border:1px solid #fcd34d; background:#fffbeb; color:#92400e; }}
+        .ai-warning-card h2 {{ margin:0 0 8px; color:#b45309; }}
+        .ai-warning-card p {{ margin:0; line-height:1.7; }}
         .ai-content {{ display:grid; gap:10px; color:#1e3a8a; }}
         .ai-content h3,.ai-content h4,.ai-content h5,.ai-content h6 {{ margin:8px 0 0; color:#1d4ed8; line-height:1.35; }}
         .ai-content h3 {{ font-size:17px; }}
@@ -1025,6 +1041,7 @@ def render_html(payload: dict, report_name: str, raw_dir: Path | None = None) ->
         {summary_html}
         {warnings_html}
         {ai_summary_html}
+        {ai_warning_html}
         {tab_bar_html}
         {windows_html}
         {fund_rank_html}
