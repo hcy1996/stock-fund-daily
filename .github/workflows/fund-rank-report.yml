@@ -1,8 +1,8 @@
-name: Stock Daily Report
+name: Fund Rank Report
 
 on:
   schedule:
-    - cron: "0 13 * * 1-5"
+    - cron: "30 14 * * 1-5"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -15,11 +15,11 @@ permissions:
   contents: write
 
 jobs:
-  daily-report:
+  fund-rank-report:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     concurrency:
-      group: stock-daily-report
+      group: fund-rank-report
       cancel-in-progress: false
     outputs:
       report_date: ${{ steps.preflight.outputs.report_date }}
@@ -98,8 +98,8 @@ jobs:
               },
               "recipients": recipients,
               "schedule": {
-                  "hour": 21,
-                  "minute": 0,
+                  "hour": 22,
+                  "minute": 30,
                   "timezone": "Asia/Shanghai",
               },
               "storage": {
@@ -144,80 +144,74 @@ jobs:
           )
           PY
 
-      - name: Fetch market data
-        run: bash ./scripts/fetch_market_data.sh
-
-      - name: Preflight data snapshot
+      - name: Preflight fund rank snapshot
         id: preflight
         shell: bash
         run: |
-          python3 -m app.cli ingest
           REPORT_DATE="$(python3 - <<'PY'
           from app.config import load_config
-          from app.storage import connect, init_db, latest_trade_date
+          from app.sources.fund_rank import fetch_rank_payload, parse_rank_payload
 
           config = load_config()
-          conn = connect(config.storage.db_path)
-          init_db(conn)
-          trade_date = latest_trade_date(conn)
-          conn.close()
-          if not trade_date:
-              raise SystemExit("No trade snapshot available after ingest.")
-          print(trade_date)
+          payload = fetch_rank_payload("day", config.sources.user_agent, page_size=1, page_index=1)
+          records = parse_rank_payload(payload, "day")
+          if not records:
+              raise SystemExit("No fund rank snapshot available.")
+          print(records[0].snapshot_date)
           PY
           )"
           TODAY="$(date +%F)"
           echo "report_date=$REPORT_DATE" >> "$GITHUB_OUTPUT"
           echo "today=$TODAY" >> "$GITHUB_OUTPUT"
           if [ "${{ github.event_name }}" = "schedule" ] && [ "$REPORT_DATE" != "$TODAY" ]; then
-            echo "Scheduled run skipped: report date $REPORT_DATE does not match current trading date $TODAY."
+            echo "Scheduled fund-rank run skipped: report date $REPORT_DATE does not match current date $TODAY."
             exit 0
           fi
 
-      - name: Generate report and optionally send email
+      - name: Generate fund rank report and optionally send email
         id: generate
         if: ${{ github.event_name != 'schedule' || steps.preflight.outputs.report_date == steps.preflight.outputs.today || inputs.dry_run == true }}
         shell: bash
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            REPORT_OUTPUT="$(python3 -m app.cli run-once --dry-run)"
+            REPORT_OUTPUT="$(python3 -m app.cli fund-rank-report --top-n 300)"
           else
-            REPORT_OUTPUT="$(python3 -m app.cli run-once)"
+            REPORT_OUTPUT="$(python3 -m app.cli fund-rank-report --top-n 300 --send-email)"
           fi
           printf '%s\n' "$REPORT_OUTPUT"
-          REPORT_PATH="$(printf '%s\n' "$REPORT_OUTPUT" | awk '/daily-report\.html$/ { path=$0 } END { print path }')"
+          REPORT_PATH="$(printf '%s\n' "$REPORT_OUTPUT" | awk -F': ' '/^HTML: / { path=$2 } END { print path }')"
           if [ -z "$REPORT_PATH" ]; then
-            echo "Failed to locate generated report path from command output." >&2
+            echo "Failed to locate generated fund-rank report path from command output." >&2
             exit 1
           fi
           echo "report_path=$REPORT_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Upload generated report
+      - name: Upload generated fund rank report
         if: ${{ steps.generate.outputs.report_path != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: stock-daily-report
-          path: output/*.html
+          name: fund-rank-report
+          path: output/fund-rank/**/*
           if-no-files-found: warn
 
-      - name: Save report into repository
+      - name: Save fund rank report into repository
         if: ${{ steps.generate.outputs.report_path != '' }}
         shell: bash
         run: |
-          mkdir -p reports
-          cp "${{ steps.generate.outputs.report_path }}" "reports/${{ steps.preflight.outputs.report_date }}-daily-report.html"
-          cp "${{ steps.generate.outputs.report_path }}" "reports/latest.html"
+          mkdir -p reports/fund-rank
+          cp "${{ steps.generate.outputs.report_path }}" "reports/fund-rank/${{ steps.preflight.outputs.report_date }}.html"
+          cp "${{ steps.generate.outputs.report_path }}" "reports/fund-rank/latest.html"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add reports
           if git diff --cached --quiet; then
-            echo "No report changes to commit."
+            echo "No fund-rank report changes to commit."
             exit 0
           fi
 
-          git commit -m "chore: save daily report ${{ steps.preflight.outputs.report_date }} [skip ci]"
+          git commit -m "chore: save fund rank report ${{ steps.preflight.outputs.report_date }} [skip ci]"
           git push origin HEAD:${{ github.ref_name }}
 
       - name: Prepare GitHub Pages site
@@ -251,8 +245,8 @@ jobs:
           path: site
 
   deploy-pages:
-    if: ${{ needs.daily-report.outputs.report_path != '' }}
-    needs: daily-report
+    if: ${{ needs.fund-rank-report.outputs.report_path != '' }}
+    needs: fund-rank-report
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -269,4 +263,5 @@ jobs:
         shell: bash
         run: |
           echo "GitHub Pages URL: ${{ steps.deployment.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Report date: ${{ needs.daily-report.outputs.report_date }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Fund-rank URL: ${{ steps.deployment.outputs.page_url }}fund-rank/" >> "$GITHUB_STEP_SUMMARY"
+          echo "Report date: ${{ needs.fund-rank-report.outputs.report_date }}" >> "$GITHUB_STEP_SUMMARY"

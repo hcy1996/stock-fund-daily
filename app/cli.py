@@ -232,6 +232,30 @@ def generate_report(config) -> tuple[Path, str, str]:
     return report_path, subject, html
 
 
+def _send_logged_html_email(
+    config,
+    *,
+    subject: str,
+    html: str,
+    detail: str,
+) -> None:
+    if config.using_example_config:
+        raise RuntimeError("当前仍在使用 config.example.json。请先复制并填写 config.json。")
+
+    conn = connect(config.storage.db_path)
+    init_db(conn)
+    now = datetime.now(ZoneInfo(config.schedule.timezone)).isoformat()
+    try:
+        send_html_email(config.smtp, config.recipients, subject, html)
+        log_email_send(conn, now, subject, config.recipients, "success", detail)
+        print("Email sent.")
+    except Exception as exc:
+        log_email_send(conn, now, subject, config.recipients, "failed", str(exc))
+        raise
+    finally:
+        conn.close()
+
+
 def cmd_ingest(args) -> int:
     config = load_config(args.config)
     count = ingest_raw(config)
@@ -287,21 +311,12 @@ def cmd_run_once(args) -> int:
         print("Dry run complete. Email not sent.")
         return 0
 
-    if config.using_example_config:
-        raise RuntimeError("当前仍在使用 config.example.json。请先复制并填写 config.json。")
-
-    conn = connect(config.storage.db_path)
-    init_db(conn)
-    now = datetime.now(ZoneInfo(config.schedule.timezone)).isoformat()
-    try:
-        send_html_email(config.smtp, config.recipients, subject, html)
-        log_email_send(conn, now, subject, config.recipients, "success", str(report_path))
-        print("Email sent.")
-    except Exception as exc:
-        log_email_send(conn, now, subject, config.recipients, "failed", str(exc))
-        raise
-    finally:
-        conn.close()
+    _send_logged_html_email(
+        config,
+        subject=subject,
+        html=html,
+        detail=str(report_path),
+    )
     return 0
 
 
@@ -345,6 +360,16 @@ def cmd_fund_rank_report(args) -> int:
     print(f"JSON: {json_path}")
     print(f"SUMMARY: {summary_path}")
     print(f"HTML: {html_path}")
+    if args.send_email:
+        trade_date = html_path.parent.name
+        subject = f"{config.meta.report_name} - 基金排行榜 | {trade_date}"
+        html = html_path.read_text(encoding="utf-8")
+        _send_logged_html_email(
+            config,
+            subject=subject,
+            html=html,
+            detail=str(html_path),
+        )
     return 0
 
 
@@ -407,6 +432,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--refresh-holdings",
         action="store_true",
         help="显式刷新基金持仓 raw，默认只读本地缓存",
+    )
+    fund_rank_report_parser.add_argument(
+        "--send-email",
+        action="store_true",
+        help="生成后发送基金排行榜邮件",
     )
     fund_rank_report_parser.set_defaults(func=cmd_fund_rank_report)
     return parser

@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import time
 from urllib import error
+from zoneinfo import ZoneInfo
+from datetime import datetime
 
 from app.fund_rank_report.analyzer import PERIOD_LABELS, PERIOD_ORDER
 from app.models import FundRankRecord
@@ -20,6 +22,10 @@ from app.sources.fund_rank import (
 RANK_REMOTE_REQUEST_INTERVAL_SECONDS = 0.25
 RANK_REMOTE_MAX_RETRIES = 3
 _LAST_RANK_REMOTE_REQUEST_AT = 0.0
+
+
+def _current_snapshot_date() -> str:
+    return datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d")
 
 
 def _throttle_rank_remote_requests() -> None:
@@ -106,7 +112,13 @@ def _load_or_fetch_period_records(
 ) -> tuple[list[FundRankRecord], str | None]:
     raw_path = expected_rank_files(raw_dir)[period]
     local_records = parse_rank_file(raw_path, period)[:top_n] if raw_path.exists() else []
-    if local_records and len(local_records) >= top_n and not refresh:
+    local_snapshot_date = local_records[0].snapshot_date if local_records else ""
+    if (
+        local_records
+        and len(local_records) >= top_n
+        and local_snapshot_date == _current_snapshot_date()
+        and not refresh
+    ):
         return local_records[:top_n], None
 
     try:

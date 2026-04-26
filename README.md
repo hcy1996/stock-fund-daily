@@ -145,6 +145,8 @@ curl --location "https://ark.cn-beijing.volces.com/api/v3/responses/<response_id
 - workflow 还会把当次报告提交到仓库 `reports/` 目录，并同步更新 `reports/latest.html`
 - workflow 提交 `reports/` 时，也会一并保存 `reports/history/` 下的 AI 历史快照
 - workflow 还会自动发布 GitHub Pages，默认首页为最新一期报告
+- 基金排行榜报告会通过独立 workflow 在工作日 `22:30 Asia/Shanghai` 触发，单独发布到 `fund-rank/` 子路径，并发送邮件
+- 节假日无法由 GitHub cron 直接识别；当前做法是工作日 cron 触发后先检查排行榜快照日期，若不是当天则自动跳过
 
 如果需要通过网页直接访问 HTML 报告，还需要在仓库设置里确认：
 
@@ -152,6 +154,8 @@ curl --location "https://ark.cn-beijing.volces.com/api/v3/responses/<response_id
 2. `Settings > Actions > General > Workflow permissions` 设为 `Read and write permissions`
 3. 首次 workflow 成功后，可通过 `https://<owner>.github.io/<repo>/` 访问最新报告
 4. 同时保留 `https://<owner>.github.io/<repo>/latest.html` 和 `https://<owner>.github.io/<repo>/<YYYY-MM-DD>-daily-report.html`
+5. 基金排行榜单独页面路径为 `https://<owner>.github.io/<repo>/fund-rank/`
+6. 同时保留 `https://<owner>.github.io/<repo>/fund-rank/latest.html` 和 `https://<owner>.github.io/<repo>/fund-rank/<YYYY-MM-DD>.html`
 
 ## 常用命令
 
@@ -175,6 +179,12 @@ python3 -m app.cli fund-rank-report
 python3 -m app.cli fund-rank-report
 ```
 
+发送邮件：
+
+```bash
+python3 -m app.cli fund-rank-report --send-email
+```
+
 第一阶段当前包含：
 
 - 天天基金 `今日 / 近一周 / 近一月 / 近三月 / 近六月 / 近一年` 各前 `300`
@@ -187,6 +197,13 @@ python3 -m app.cli fund-rank-report
 - `output/fund-rank/<trade_date>/report.html`
 - `output/fund-rank/<trade_date>/result.json`
 - `output/fund-rank/<trade_date>/summary.txt`
+
+GitHub Actions：
+
+- workflow：`.github/workflows/fund-rank-report.yml`
+- cron：工作日 `22:30 Asia/Shanghai`，对应 `30 14 * * 1-5`
+- 调度后会先检查当日基金排行榜快照日期；若不是当天，则自动跳过，不发邮件、不更新 Pages
+- GitHub Pages 子路径：`/fund-rank/`
 
 ## A股板块波段强度评分
 
