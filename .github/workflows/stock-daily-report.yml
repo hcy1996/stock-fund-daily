@@ -21,8 +21,12 @@ jobs:
     concurrency:
       group: stock-daily-report
       cancel-in-progress: false
+    outputs:
+      report_date: ${{ steps.preflight.outputs.report_date }}
+      report_path: ${{ steps.generate.outputs.report_path }}
     env:
       TZ: Asia/Shanghai
+      USER_AGENT: ${{ vars.STOCK_REPORT_USER_AGENT }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -143,36 +147,53 @@ jobs:
       - name: Fetch market data
         run: bash ./scripts/fetch_market_data.sh
 
-      - name: Preflight report
+      - name: Preflight data snapshot
         id: preflight
         shell: bash
         run: |
-          REPORT_OUTPUT="$(python3 -m app.cli report --ingest)"
-          printf '%s\n' "$REPORT_OUTPUT"
-          REPORT_PATH="$(printf '%s\n' "$REPORT_OUTPUT" | tail -n 1)"
-          REPORT_FILE="$(basename "$REPORT_PATH")"
-          REPORT_DATE="${REPORT_FILE%%-daily-report.html}"
+          python3 -m app.cli ingest
+          REPORT_DATE="$(python3 - <<'PY'
+          from app.config import load_config
+          from app.storage import connect, init_db, latest_trade_date
+
+          config = load_config()
+          conn = connect(config.storage.db_path)
+          init_db(conn)
+          trade_date = latest_trade_date(conn)
+          conn.close()
+          if not trade_date:
+              raise SystemExit("No trade snapshot available after ingest.")
+          print(trade_date)
+          PY
+          )"
           TODAY="$(date +%F)"
-          echo "report_path=$REPORT_PATH" >> "$GITHUB_OUTPUT"
           echo "report_date=$REPORT_DATE" >> "$GITHUB_OUTPUT"
           echo "today=$TODAY" >> "$GITHUB_OUTPUT"
           if [ "${{ github.event_name }}" = "schedule" ] && [ "$REPORT_DATE" != "$TODAY" ]; then
-            echo "should_send=false" >> "$GITHUB_OUTPUT"
             echo "Scheduled run skipped: report date $REPORT_DATE does not match current trading date $TODAY."
-          else
-            echo "should_send=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      - name: Generate and send report
-        if: ${{ steps.preflight.outputs.should_send == 'true' && inputs.dry_run != true }}
-        run: python3 -m app.cli run-once
-
-      - name: Generate report without sending email
-        if: ${{ inputs.dry_run == true }}
-        run: python3 -m app.cli run-once --dry-run
+      - name: Generate report and optionally send email
+        id: generate
+        if: ${{ github.event_name != 'schedule' || steps.preflight.outputs.report_date == steps.preflight.outputs.today || inputs.dry_run == true }}
+        shell: bash
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            REPORT_OUTPUT="$(python3 -m app.cli run-once --dry-run)"
+          else
+            REPORT_OUTPUT="$(python3 -m app.cli run-once)"
+          fi
+          printf '%s\n' "$REPORT_OUTPUT"
+          REPORT_PATH="$(printf '%s\n' "$REPORT_OUTPUT" | awk '/daily-report\.html$/ { path=$0 } END { print path }')"
+          if [ -z "$REPORT_PATH" ]; then
+            echo "Failed to locate generated report path from command output." >&2
+            exit 1
+          fi
+          echo "report_path=$REPORT_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Upload generated report
-        if: always()
+        if: ${{ steps.generate.outputs.report_path != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: stock-daily-report
@@ -180,12 +201,12 @@ jobs:
           if-no-files-found: warn
 
       - name: Save report into repository
-        if: ${{ steps.preflight.outputs.report_path != '' && (inputs.dry_run == true || steps.preflight.outputs.should_send == 'true') }}
+        if: ${{ steps.generate.outputs.report_path != '' }}
         shell: bash
         run: |
           mkdir -p reports
-          cp "${{ steps.preflight.outputs.report_path }}" "reports/${{ steps.preflight.outputs.report_date }}-daily-report.html"
-          cp "${{ steps.preflight.outputs.report_path }}" "reports/latest.html"
+          cp "${{ steps.generate.outputs.report_path }}" "reports/${{ steps.preflight.outputs.report_date }}-daily-report.html"
+          cp "${{ steps.generate.outputs.report_path }}" "reports/latest.html"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -198,3 +219,44 @@ jobs:
 
           git commit -m "chore: save daily report ${{ steps.preflight.outputs.report_date }} [skip ci]"
           git push origin HEAD:${{ github.ref_name }}
+
+      - name: Prepare GitHub Pages site
+        if: ${{ steps.generate.outputs.report_path != '' }}
+        shell: bash
+        run: |
+          mkdir -p site
+          cp "${{ steps.generate.outputs.report_path }}" "site/index.html"
+          cp "${{ steps.generate.outputs.report_path }}" "site/latest.html"
+          cp "${{ steps.generate.outputs.report_path }}" "site/${{ steps.preflight.outputs.report_date }}-daily-report.html"
+          touch site/.nojekyll
+
+      - name: Configure GitHub Pages
+        if: ${{ steps.generate.outputs.report_path != '' }}
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        if: ${{ steps.generate.outputs.report_path != '' }}
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy-pages:
+    if: ${{ needs.daily-report.outputs.report_path != '' }}
+    needs: daily-report
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Write deployment summary
+        shell: bash
+        run: |
+          echo "GitHub Pages URL: ${{ steps.deployment.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Report date: ${{ needs.daily-report.outputs.report_date }}" >> "$GITHUB_STEP_SUMMARY"

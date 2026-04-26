@@ -9,7 +9,7 @@ STATUS_FILE="$RAW_DIR/fetch_status.tsv"
 mkdir -p "$EASTMONEY_DIR" "$TONGHUASHUN_DIR" "$ROOT/output" "$ROOT/data"
 : > "$STATUS_FILE"
 
-UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+UA="${USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36}"
 EASTMONEY_BASE_URLS=(
   "http://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fs=m:90+t:3+f:!50"
   "http://79.push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fs=m:90+t:3+f:!50"

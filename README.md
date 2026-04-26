@@ -104,6 +104,7 @@ python3 -m app.cli run-once
 - `STOCK_REPORT_SMTP_USE_SSL`
 - `STOCK_REPORT_SMTP_STARTTLS`
 - `STOCK_REPORT_USER_AGENT`
+- `STOCK_REPORT_ENABLE_TONGHUASHUN_20D`
 
 注意：
 
@@ -111,6 +112,14 @@ python3 -m app.cli run-once
 - GitHub runner 默认不保留本地 SQLite 和原始抓取数据，因此邮件发送日志不会自动跨天保留
 - 每次执行完成后会上传当次生成的 HTML 报告 artifact，便于回看
 - workflow 还会把当次报告提交到仓库 `reports/` 目录，并同步更新 `reports/latest.html`
+- workflow 还会自动发布 GitHub Pages，默认首页为最新一期报告
+
+如果需要通过网页直接访问 HTML 报告，还需要在仓库设置里确认：
+
+1. `Settings > Pages > Build and deployment > Source` 设为 `GitHub Actions`
+2. `Settings > Actions > General > Workflow permissions` 设为 `Read and write permissions`
+3. 首次 workflow 成功后，可通过 `https://<owner>.github.io/<repo>/` 访问最新报告
+4. 同时保留 `https://<owner>.github.io/<repo>/latest.html` 和 `https://<owner>.github.io/<repo>/<YYYY-MM-DD>-daily-report.html`
 
 ## 常用命令
 
